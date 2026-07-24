@@ -47,6 +47,80 @@
   margin-top: 0.65rem;
 }
 
+.lotus-dynamic-input-panel {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 75%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--background-secondary) 88%, transparent);
+  font-family: var(--font-interface);
+}
+
+.lotus-dynamic-input-fields {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.lotus-dynamic-input-field {
+  display: grid;
+  grid-template-columns: minmax(5rem, 9rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  font-size: 0.85rem;
+}
+
+.lotus-dynamic-input-field.is-slider {
+  grid-template-columns: minmax(5rem, 9rem) minmax(7rem, 1fr) 4.5rem;
+}
+
+.lotus-dynamic-input-label {
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+}
+
+.lotus-dynamic-input-field input,
+.lotus-dynamic-input-field select {
+  min-width: 0;
+  width: 100%;
+}
+
+.lotus-dynamic-input-field.is-checkbox input {
+  justify-self: start;
+  width: auto;
+}
+
+.lotus-dynamic-input-value {
+  overflow: hidden;
+  font-family: var(--font-monospace);
+  font-size: 0.8rem;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-normal);
+}
+
+.lotus-dynamic-input-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.lotus-dynamic-input-actions button {
+  font-size: 0.8rem;
+  padding: 0.3rem 0.65rem;
+}
+
+.lotus-dynamic-input-errors {
+  font-family: var(--font-monospace);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-error);
+}
+
 .lotus-stdin-panel {
   display: grid;
   gap: 0.5rem;
@@ -962,8 +1036,29 @@
   }
 }
 
+@media (max-width: 520px) {
+  .lotus-dynamic-input-field,
+  .lotus-dynamic-input-field.is-slider {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .lotus-dynamic-input-label {
+    grid-column: 1 / -1;
+  }
+
+  .lotus-dynamic-input-field:not(.is-slider) input,
+  .lotus-dynamic-input-field select {
+    grid-column: 1 / -1;
+  }
+
+  .lotus-dynamic-input-field.is-checkbox input {
+    grid-column: auto;
+  }
+}
+
 @media print {
   body .lotus-code-toolbar,
+  body .lotus-dynamic-input-panel,
   body .lotus-stdin-panel,
   body .lotus-inline-output-host:empty {
     display: none;

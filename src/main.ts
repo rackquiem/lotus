@@ -37,6 +37,12 @@ import { lotusSettingTab, showExecutionDisabledNotice } from "./settings";
 import { resolveReferencedSource, type lotusExternalSourceExtractor } from "./sourceExtract";
 import { runExternalSourcePreprocessorPipeline, type lotusExternalSourcePreprocessor, type lotusPreprocessorPipelineSpec } from "./sourcePreprocess";
 import { buildSourceReferenceHarness } from "./sourceHarness";
+import {
+  parseDynamicInputDirectives,
+  resolveDynamicInputValues,
+  substituteDynamicInputValues,
+  type lotusDynamicInput,
+} from "./dynamicInputs";
 import { createCodeBlockToolbar } from "./ui/codeBlockToolbar";
 import { LOTUS_LOG_VIEW_TYPE, lotusLogView } from "./ui/logView";
 import { createOutputPanel, createRunningPanel } from "./ui/outputPanel";
@@ -500,6 +506,7 @@ export default class lotusPlugin extends Plugin {
   private cachedSigningPassphrase: string | null = null;
   private readonly stdinInputs = new Map<string, string>();
   private readonly stdinPanels = new Set<string>();
+  private readonly dynamicInputValues = new Map<string, Record<string, string>>();
   private readonly running = new Map<string, AbortController>();
   private readonly outputListeners = new Map<string, Set<() => void>>();
   private readonly apiServer = new lotusApiServer(this);
@@ -1236,6 +1243,10 @@ export default class lotusPlugin extends Plugin {
     container.empty();
     const blockId = block.id;
 
+    if (this.hasDynamicInputs(block)) {
+      container.appendChild(this.createDynamicInputPanel(block));
+    }
+
     if (this.shouldRenderStdinPanel(block)) {
       container.appendChild(this.createStdinPanel(block));
     }
@@ -1391,6 +1402,7 @@ export default class lotusPlugin extends Plugin {
     this.running.get(blockId)?.abort();
     this.running.delete(blockId);
     this.outputs.delete(blockId);
+    this.dynamicInputValues.delete(blockId);
 
     await this.app.vault.process(file, (content) => {
       const lines = content.split(/\r?\n/);
@@ -2919,6 +2931,11 @@ export default class lotusPlugin extends Plugin {
       } : undefined;
     }
 
+    executableBlock = this.applyDynamicInputPreprocessor(block, executableBlock);
+    if (sourcePreview) {
+      sourcePreview.content = executableBlock.content;
+    }
+
     const preprocessorPipeline = this.getCustomLanguagePreprocessorPipeline(block, file, signal);
     if (!preprocessorPipeline) {
       return { block: executableBlock, sourcePreview };
@@ -2943,6 +2960,59 @@ export default class lotusPlugin extends Plugin {
         }
         : undefined,
       preprocessDescription,
+    };
+  }
+
+  private applyDynamicInputPreprocessor(block: lotusCodeBlock, executableBlock: lotusCodeBlock): lotusCodeBlock {
+    const blockDirectives = parseDynamicInputDirectives(block.content);
+    const executableDirectives = executableBlock.content === block.content
+      ? blockDirectives
+      : parseDynamicInputDirectives(executableBlock.content);
+    const errors = [...blockDirectives.errors];
+    if (executableDirectives !== blockDirectives) {
+      errors.push(...executableDirectives.errors);
+    }
+    if (errors.length) {
+      throw new Error(errors.join("\n"));
+    }
+
+    const inputs = [...blockDirectives.inputs];
+    const knownNames = new Set(inputs.flatMap((input) => input.name ? [input.name] : []));
+    if (executableDirectives !== blockDirectives) {
+      for (const input of executableDirectives.inputs) {
+        if (!input.name || !knownNames.has(input.name)) {
+          inputs.push(input);
+          if (input.name) knownNames.add(input.name);
+        }
+      }
+    }
+
+    const values = resolveDynamicInputValues(inputs, this.dynamicInputValues.get(block.id));
+    if (inputs.length) {
+      this.dynamicInputValues.set(block.id, values);
+    }
+    const content = substituteDynamicInputValues(executableDirectives.source, values);
+    const codePackage = executableBlock.codePackage
+      ? {
+        ...executableBlock.codePackage,
+        files: executableBlock.codePackage.files.map((file) => {
+          const parsed = parseDynamicInputDirectives(file.content);
+          if (parsed.errors.length) {
+            throw new Error(parsed.errors.join("\n"));
+          }
+          const fileValues = resolveDynamicInputValues(parsed.inputs, values);
+          return {
+            ...file,
+            content: substituteDynamicInputValues(parsed.source, { ...fileValues, ...values }),
+          };
+        }),
+      }
+      : undefined;
+
+    return {
+      ...executableBlock,
+      content,
+      codePackage,
     };
   }
 
@@ -3371,6 +3441,7 @@ export default class lotusPlugin extends Plugin {
     const hasOutput = (blockId: string) => this.outputs.has(blockId);
     const isRunning = (blockId: string) => this.running.has(blockId);
     const shouldRenderStdinPanel = (block: lotusCodeBlock) => this.shouldRenderStdinPanel(block);
+    const hasDynamicInputs = (block: lotusCodeBlock) => this.hasDynamicInputs(block);
     const createToolbarWidget = (block: lotusCodeBlock) => new lotusToolbarWidget(this, block);
     const createOutputWidget = (block: lotusCodeBlock) => new lotusOutputWidget(this, block);
 
@@ -3414,7 +3485,7 @@ export default class lotusPlugin extends Plugin {
               }),
             );
 
-            if (hasOutput(block.id) || isRunning(block.id) || shouldRenderStdinPanel(block)) {
+            if (hasOutput(block.id) || isRunning(block.id) || shouldRenderStdinPanel(block) || hasDynamicInputs(block)) {
               const endLine = this.view.state.doc.line(block.endLine + 1);
               builder.add(
                 endLine.to,
@@ -3951,6 +4022,148 @@ export default class lotusPlugin extends Plugin {
 
   shouldRenderStdinPanel(block: lotusCodeBlock): boolean {
     return this.stdinPanels.has(block.id) || this.hasEnabledStdinAttribute(block);
+  }
+
+  hasDynamicInputs(block: lotusCodeBlock): boolean {
+    const parsed = parseDynamicInputDirectives(block.content);
+    return parsed.inputs.length > 0 || parsed.errors.length > 0;
+  }
+
+  private createDynamicInputPanel(block: lotusCodeBlock): HTMLElement {
+    const parsed = parseDynamicInputDirectives(block.content);
+    const panel = activeDocument.createElement("div");
+    panel.className = "lotus-dynamic-input-panel";
+
+    if (parsed.errors.length) {
+      const errors = panel.createDiv({ cls: "lotus-dynamic-input-errors" });
+      for (const error of parsed.errors) {
+        errors.createDiv({ text: error });
+      }
+      return panel;
+    }
+
+    const values = resolveDynamicInputValues(parsed.inputs, this.dynamicInputValues.get(block.id));
+    this.dynamicInputValues.set(block.id, values);
+    const fields = parsed.inputs.some((input) => input.kind !== "button")
+      ? panel.createDiv({ cls: "lotus-dynamic-input-fields" })
+      : null;
+    const buttons = parsed.inputs.filter((input) => input.kind === "button");
+
+    for (const input of parsed.inputs) {
+      if (input.kind === "button") {
+        continue;
+      }
+      fields?.appendChild(this.createDynamicInputField(block, input, values));
+    }
+
+    const actions = panel.createDiv({ cls: "lotus-dynamic-input-actions" });
+    if (buttons.length) {
+      for (const input of buttons) {
+        const button = actions.createEl("button", { text: input.label });
+        button.type = "button";
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (input.name) {
+            values[input.name] = input.defaultValue;
+            this.dynamicInputValues.set(block.id, values);
+          }
+          void this.runActiveBlockById(block.id);
+        });
+      }
+    } else {
+      const runButton = actions.createEl("button", { text: "Run", cls: "mod-cta" });
+      runButton.type = "button";
+      runButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void this.runActiveBlockById(block.id);
+      });
+    }
+
+    return panel;
+  }
+
+  private createDynamicInputField(
+    block: lotusCodeBlock,
+    input: lotusDynamicInput,
+    values: Record<string, string>,
+  ): HTMLElement {
+    const field = activeDocument.createElement("label");
+    field.className = `lotus-dynamic-input-field is-${input.kind}`;
+    field.createSpan({ cls: "lotus-dynamic-input-label", text: input.label });
+    const name = input.name!;
+    const currentValue = values[name] ?? input.defaultValue;
+    const updateValue = (value: string) => {
+      values[name] = value;
+      this.dynamicInputValues.set(block.id, values);
+    };
+    const runOnChange = () => {
+      if (input.runOnChange) {
+        void this.runActiveBlockById(block.id);
+      }
+    };
+
+    if (input.kind === "checkbox") {
+      const checkbox = field.createEl("input", { attr: { type: "checkbox" } });
+      checkbox.checked = currentValue === input.checkedValue;
+      checkbox.addEventListener("change", () => {
+        updateValue(checkbox.checked ? input.checkedValue! : input.uncheckedValue!);
+        runOnChange();
+      });
+      return field;
+    }
+
+    if (input.kind === "select") {
+      const select = field.createEl("select");
+      for (const option of input.options ?? []) {
+        select.createEl("option", {
+          text: option.label,
+          attr: { value: option.value },
+        });
+      }
+      select.value = currentValue;
+      select.addEventListener("change", () => {
+        updateValue(select.value);
+        runOnChange();
+      });
+      return field;
+    }
+
+    const control = field.createEl("input", {
+      attr: {
+        type: input.kind === "slider" ? "range" : input.kind,
+      },
+    });
+    control.value = currentValue;
+    if (input.min != null) control.min = String(input.min);
+    if (input.max != null) control.max = String(input.max);
+    if (input.step != null) control.step = String(input.step);
+    if (input.placeholder != null) control.placeholder = input.placeholder;
+
+    if (input.kind === "slider") {
+      const value = field.createEl("output", {
+        cls: "lotus-dynamic-input-value",
+        text: currentValue,
+      });
+      control.addEventListener("input", () => {
+        updateValue(control.value);
+        value.textContent = control.value;
+      });
+      control.addEventListener("change", () => {
+        updateValue(control.value);
+        value.textContent = control.value;
+        runOnChange();
+      });
+    } else {
+      control.addEventListener("input", () => updateValue(control.value));
+      control.addEventListener("change", () => {
+        updateValue(control.value);
+        runOnChange();
+      });
+    }
+
+    return field;
   }
 
   private hasEnabledStdinAttribute(block: lotusCodeBlock): boolean {

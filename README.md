@@ -117,6 +117,26 @@ Use `lotus-output-file-mode=append`, `lotus-output-file-streams=metadata,stdout,
 ### Standard Input (Stdin)
 Blocks can receive standard input through the toolbar input control or through attributes. Click the stdin toolbar button to open a per-block input buffer. For reproducible notes, use `lotus-stdin="line one\nline two"` or `lotus-stdin-file="inputs/payload.txt"`. The attribute `lotus-input=true` keeps the input field visible whenever the note renders.
 
+### Dynamic Inputs
+Lotus can preprocess a block with controls rendered directly beneath it. Add comment directives to the source and reference each named value with `{{name}}`:
+
+````markdown
+```python
+# @lotus-slider name=count label="Count" min=1 max=20 step=1 default=5
+# @lotus-text name=message label="Message" default="hello"
+# @lotus-checkbox name=verbose label="Verbose" checked=true value=True unchecked=False
+# @lotus-select name=mode label="Mode" options="Fast:fast,Safe:safe" default=safe
+# @lotus-button name=operation label="Add" value=add
+# @lotus-button name=operation label="Multiply" value=multiply
+
+print("{{message}}", {{count}}, {{verbose}}, "{{mode}}", "{{operation}}")
+```
+````
+
+Supported directives are `@lotus-slider`, `@lotus-number`, `@lotus-text`, `@lotus-checkbox`, `@lotus-select`, and `@lotus-button`. Directive lines may start with `#`, `//`, `--`, `;`, `%`, `/*`, or `(*` so they remain comments in common source languages. Sliders default to `min=0 max=100 step=1`; selects use comma-separated `label:value` options. A button without `name` only runs the block. Multiple buttons may share a name to set different values before execution.
+
+Changing a control updates its transient per-block value. The panel's run button applies the current values; add `run=true` to a slider, number, text, checkbox, or select to run when the value is committed. Directives are replaced with blank lines and placeholders are substituted immediately before the existing custom preprocessor and runner pipeline. Substitution is raw source text, so quote or escape text placeholders according to the target language.
+
 ## Rich Displays
 
 Lotus can render rich display outputs in addition to stdout and stderr. Display outputs use MIME bundles inspired by Jupyter outputs. Supported render targets include `text/html`, `image/svg+xml`, `image/png`, `image/jpeg`, `image/gif`, `text/vnd.graphviz`, `application/json`, and `text/plain`. Trusted plugins can register custom MIME renderers for application-specific payloads. The full producer contract is documented in [Rich Display Contract](docs/display-contract.md).
