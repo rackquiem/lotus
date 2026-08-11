@@ -45,13 +45,14 @@ import {
 } from "./dynamicInputs";
 import { createCodeBlockToolbar } from "./ui/codeBlockToolbar";
 import { LOTUS_LOG_VIEW_TYPE, lotusLogView } from "./ui/logView";
-import { createOutputPanel, createRunningPanel } from "./ui/outputPanel";
+import { createOutputPanel, createRunningPanel, renderDisplayOutput } from "./ui/outputPanel";
 import { createSourceVisualizationDisplay, createStdoutVisualizationDisplay } from "./visualization/codeGraph";
 import { LOTUS_D3_MIME, LOTUS_PLOTLY_MIME, PLOTLY_MIME, createJavaScriptGraphDisplayRenderers } from "./visualization/javascriptGraphs";
 import { addSyntaxLanguageClass, highlightCodeElement, normalizeSyntaxLanguage } from "./syntaxHighlight";
 import { splitCommandLine } from "./utils/command";
 import { sha256Hash } from "./utils/hash";
 import { formatTimeoutLabel, formatTimeoutMs } from "./utils/timeout";
+import { LOTUS_MANAGED_DISPLAY_LANGUAGE, parseManagedDisplaySource, renderManagedOutputMarkdown } from "./managedOutput";
 import { assertRunnableCodePackage } from "./codePackage";
 import { createOpenSshSignature, createPassphraseSignature, createRsaSignature, readSignatureRecord, verifyOpenSshSignature, verifyPassphraseSignature, verifyRsaSignature, type lotusSignatureRecord } from "./signing";
 import {
@@ -3101,6 +3102,24 @@ export default class lotusPlugin extends Plugin {
     }
 
     this.hasRegisteredMarkdownDecorator = true;
+    if (isCompileFeatureAllowed("rich-displays")) {
+      this.registerMarkdownCodeBlockProcessor(LOTUS_MANAGED_DISPLAY_LANGUAGE, (source, el) => {
+        el.addClass("lotus-managed-display");
+        try {
+          for (const display of parseManagedDisplaySource(source)) {
+            renderDisplayOutput(el, display, {
+              defaultVisibleLines: this.settings.outputVisibleLines,
+              displayRenderers: [...this.displayRenderers],
+            });
+          }
+        } catch (error) {
+          el.createEl("pre", {
+            cls: "lotus-output-pre",
+            text: `Invalid managed Lotus display: ${formatErrorMessage(error)}`,
+          });
+        }
+      });
+    }
     this.registerMarkdownPostProcessor(async (el, ctx) => {
       await this.decorateRenderedCodeBlocks(el, ctx);
     });
@@ -3981,27 +4000,7 @@ export default class lotusPlugin extends Plugin {
   }
 
   private renderManagedOutputMarkdown(blockId: string, result: lotusStoredOutput["result"]): string[] {
-    const body = [
-      `runner=${result.runnerName}`,
-      `exit=${result.exitCode ?? "?"}`,
-      `duration=${result.durationMs}ms`,
-      `timestamp=${result.finishedAt}`,
-      result.stdout ? `stdout:\n${result.stdout}` : "",
-      result.warning ? `warning:\n${result.warning}` : "",
-      result.stderr ? `stderr:\n${result.stderr}` : "",
-      result.displays?.length ? `displays:\n${JSON.stringify(result.displays, null, 2)}` : "",
-      result.artifacts?.length ? `artifacts:\n${JSON.stringify(result.artifacts, null, 2)}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-
-    return [
-      `<!-- lotus:output:start id=${blockId} -->`,
-      "```text",
-      body,
-      "```",
-      "<!-- lotus:output:end -->",
-    ];
+    return renderManagedOutputMarkdown(blockId, result);
   }
 
   private findManagedOutputRange(lines: string[], blockId: string): { start: number; end: number } | null {
