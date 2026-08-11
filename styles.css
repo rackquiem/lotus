@@ -1094,6 +1094,12 @@
   body .lotus-print-hide-output {
     display: none;
   }
+
+  body .lotus-managed-display,
+  body .lotus-managed-display .lotus-output-display {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 }
 
 /* Tabbed Interface for Container Group Editor */
