@@ -14,6 +14,11 @@ interface lotusOutputPanelOptions {
   displayRenderers?: readonly lotusDisplayRenderer[];
 }
 
+export interface lotusDisplayOutputOptions {
+  defaultVisibleLines: number;
+  displayRenderers?: readonly lotusDisplayRenderer[];
+}
+
 export interface lotusRunningPanelOptions {
   runnerName?: string;
   stdout?: string;
@@ -92,6 +97,10 @@ export function renderOutputPanel(panel: HTMLElement, output: lotusStoredOutput,
     const empty = body.createDiv({ cls: "lotus-output-empty" });
     empty.setText("No output");
   }
+}
+
+export function renderDisplayOutput(container: HTMLElement, display: lotusDisplayOutput, options: lotusDisplayOutputOptions): void {
+  createDisplay(container, display, options.defaultVisibleLines, options.displayRenderers ?? []);
 }
 
 function createArtifactList(container: HTMLElement, artifacts: readonly lotusRunArtifact[]): void {

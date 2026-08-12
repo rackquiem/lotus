@@ -1411,6 +1411,7 @@ function renderHtmlReport(blocks: SmokeBlockResult[]): string {
     .failed { color: #991b1b; }
     .skipped { color: #92400e; }
     pre { background: #f3f4f6; padding: 12px; white-space: pre-wrap; border-radius: 6px; }
+    section { break-inside: avoid; page-break-inside: avoid; }
   </style>
 </head>
 <body>

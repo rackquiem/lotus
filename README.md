@@ -104,7 +104,7 @@ hello
 <!-- lotus:output:end -->
 ````
 
-The parser skips these regions and generated output blocks are never executed.
+Rich displays are stored in a `lotus-display` fence inside the same managed region so Lotus can render that MIME data back into the visual output in reading view and PDF exports instead of showing the serialized SVG or JSON as code while the parser continues to skip managed regions and generated output blocks are never executed.
 
 ### Output Window Limits
 Output panels can be capped to a visible line window while keeping the full output scrollable. Set **Visible output lines** in settings for a vault-wide default, or use the `lotus-output-lines=20` attribute on a specific block. Use `0` to keep output unlimited.

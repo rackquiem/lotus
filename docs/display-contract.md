@@ -225,6 +225,8 @@ lotus-visualize=svg
 
 Image displays render on a white viewport with zoom controls. Zoom preserves the current viewport center. When the image is larger than the viewport, dragging inside the image viewport pans the image. The fullscreen button opens the display in a full-window overlay with the same zoom and drag controls plus a larger zoom range.
 
+When **Write output back to note** is enabled Lotus stores display records in a managed `lotus-display` fence that preserves the MIME bundle in source mode and renders it as the original visual in reading view and PDF exports.
+
 ## HTML Displays
 
 `text/html` displays are intended for self-contained compiler or publisher output previews. They run in an isolated iframe using the browser sandbox, so page scripts cannot access the Obsidian document or plugin APIs. Prefer the built-in declarative graph MIME types when the result should participate in Lotus print snapshots or use trusted renderer integrations.
