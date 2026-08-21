@@ -1,6 +1,6 @@
 {
   "name": "obsidian-lotus",
-  "version": "1.2.0",
+  "version": "1.2.3",
   "description": "Obsidian plugin for running normal fenced code blocks with native syntax highlighting.",
   "author": "James Karlsson and Thomas Goldman",
   "license": "MIT",
