@@ -1,14 +1,7 @@
 
 import { Modal, Plugin, Setting } from "obsidian";
+import type { lotusSignatureMaterial } from "../../engine/signingService";
 import { HASH_POLICY_PRESETS, getHashPolicyPresetDefinition, type lotusHashPolicy, type lotusHashPolicyPreset } from "../../engine/reproducibility";
-
-export interface lotusSignatureMaterial {
-  mode: "passphrase" | "rsa" | "ssh";
-  passphrase?: string;
-  privateKeyPem?: string;
-  privateKeyPassphrase?: string;
-  rememberForSession?: boolean;
-}
 
 export class ExecutionConsentModal extends Modal {
   constructor(

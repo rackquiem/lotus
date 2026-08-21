@@ -13,6 +13,7 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "test:dynamic-inputs": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/dynamic-inputs.test.mjs",
     "test:managed-output": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/managed-output.test.mjs",
+    "test:engine": "node scripts/engine-smoke.mjs",
     "lint": "eslint --quiet src scripts language-packs esbuild.config.mjs manifest.json LICENSE",
     "smoke": "node scripts/smoke.mjs",
     "smoke:matrix": "npm run smoke -- --profile minimal && npm run smoke -- --profile systems && npm run smoke -- --profile proofs && npm run smoke -- --profile ebpf && npm run smoke -- --profile full",
