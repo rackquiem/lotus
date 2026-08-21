@@ -17,6 +17,8 @@ concurrency:
 jobs:
   tag-manifest-version:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.manifest.outputs.version }}
     steps:
       - name: Wait for smoke tests to succeed
         uses: lewagon/wait-on-check-action@ccfb013c15c8afb7bf2b7c028fb74dc5a068cccc
@@ -72,4 +74,6 @@ jobs:
       id-token: write
       attestations: write
     uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.tag-manifest-version.outputs.version }}
     secrets: inherit
