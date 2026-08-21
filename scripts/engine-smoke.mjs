@@ -6,12 +6,12 @@ import process from "process";
 import { fileURLToPath } from "url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const outDir = path.join(os.tmpdir(), "lotus-verify-signatures");
-const outfile = path.join(outDir, "verify-signatures.mjs");
+const outDir = path.join(os.tmpdir(), "lotus-engine-smoke");
+const outfile = path.join(outDir, "engine-smoke.mjs");
 
 await mkdir(outDir, { recursive: true });
 await esbuild.build({
-  entryPoints: [path.join(rootDir, "scripts", "verify-signatures.ts")],
+  entryPoints: [path.join(rootDir, "scripts", "engine-smoke.ts")],
   bundle: true,
   outfile,
   format: "esm",

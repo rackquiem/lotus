@@ -56,6 +56,21 @@ export default defineConfig([
     },
   },
   {
+    files: ["src/engine/**/*.ts"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        paths: [
+          { name: "obsidian", message: "src/engine must not depend on Obsidian; pass a host interface from src/plugin instead." },
+          { name: "electron", message: "src/engine must not depend on Electron." },
+        ],
+        patterns: [
+          { group: ["@codemirror/*"], message: "src/engine must not depend on CodeMirror; editor integration lives in src/plugin." },
+          { group: ["../plugin/*", "../../plugin/*", "../../../plugin/*"], message: "src/engine must not import from src/plugin." },
+        ],
+      }],
+    },
+  },
+  {
     files: ["scripts/**/*.ts", "scripts/**/*.mjs", "esbuild.config.mjs"],
     languageOptions: {
       globals: globals.node,

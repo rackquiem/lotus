@@ -1,6 +1,6 @@
 import { Decoration, type EditorView } from "@codemirror/view";
 import type { RangeSetBuilder } from "@codemirror/state";
-import type { lotusCodeBlock } from "./types";
+import type { lotusCodeBlock } from "../engine/types";
 
 interface LlvmToken {
   from: number;

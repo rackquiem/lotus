@@ -1,4 +1,4 @@
-import { Notice, normalizePath } from "obsidian";
+import { normalizeVaultPath } from "./utils/vaultPath";
 import { createHmac, createHash, timingSafeEqual } from "crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "http";
 import type { lotusCodeBlock, lotusPluginSettings, lotusRunResult, lotusStoredOutput } from "./types";
@@ -75,6 +75,7 @@ export interface lotusApiHost {
       };
     };
   };
+  notify(message: string): void;
   listApiNotes(query?: string): Promise<lotusApiNote[]>;
   listApiBlocks(notePath: string): Promise<lotusApiBlock[]>;
   getApiBlock(blockId: string): Promise<lotusApiBlock | null>;
@@ -140,7 +141,7 @@ export class lotusApiServer {
       this.server?.listen(port, host, () => resolve());
     });
     this.bound = `${host}:${port}`;
-    new Notice(`Lotus API listening on http://${this.bound}/v1`);
+    this.host.notify(`Lotus API listening on http://${this.bound}/v1`);
   }
 
   private async handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -362,7 +363,7 @@ export function normalizeApiLogPath(configDir: string, path: string): string {
   if (!trimmed) {
     return "";
   }
-  return normalizePath(trimmed.startsWith("/") ? trimmed.slice(1) : trimmed.startsWith(configDir) ? trimmed : trimmed);
+  return normalizeVaultPath(trimmed.startsWith("/") ? trimmed.slice(1) : trimmed.startsWith(configDir) ? trimmed : trimmed);
 }
 
 function parseApiKeys(raw: string): lotusApiKey[] {

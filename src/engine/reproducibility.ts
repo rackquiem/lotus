@@ -1,8 +1,16 @@
-import { parseYaml } from "obsidian";
 import { parseMarkdownCodeBlocks } from "./parser";
 import { sha256Hash } from "./utils/hash";
 import type { lotusCodeBlock, lotusPluginSettings } from "./types";
 
+type lotusYamlParser = (yaml: string) => unknown;
+
+let parseYaml: lotusYamlParser = () => {
+  throw new Error("Lotus reproducibility requires a YAML parser. Call setFrontmatterYamlParser() first.");
+};
+
+export function setFrontmatterYamlParser(parser: lotusYamlParser): void {
+  parseYaml = parser;
+}
 export const NOTE_HASH_FRONTMATTER_KEY = "lotus-note-hash";
 export const CODE_BLOCK_HASHES_FRONTMATTER_KEY = "lotus-code-block-hashes";
 export const SIGNATURE_FRONTMATTER_KEY = "lotus-signature";

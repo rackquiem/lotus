@@ -1,4 +1,4 @@
-import { normalizePath, requestUrl, type App } from "obsidian";
+import { normalizeVaultPath } from "./utils/vaultPath";
 import { spawn, type ChildProcess } from "child_process";
 import { dirname } from "path";
 import { splitCommandLine } from "./utils/command";
@@ -63,12 +63,24 @@ interface lotusLogEvent {
   truncated?: boolean;
 }
 
+export interface lotusLogHost {
+  vaultName: string;
+  configDir: string;
+  vaultBasePath: string | undefined;
+  exists(path: string): Promise<boolean>;
+  read(path: string): Promise<string>;
+  append(path: string, content: string): Promise<void>;
+  write(path: string, content: string): Promise<void>;
+  mkdir(path: string): Promise<void>;
+  postJson(url: string, headers: Record<string, string>, body: string): Promise<void>;
+}
+
 export class lotusLogger {
   private processChild: ChildProcess | null = null;
   private processCommand = "";
 
   constructor(
-    private readonly app: App,
+    private readonly host: lotusLogHost,
     private readonly getSettings: () => lotusPluginSettings,
   ) {}
 
@@ -191,11 +203,11 @@ export class lotusLogger {
   private createMachineHash(settings: lotusPluginSettings): string {
     switch (settings.loggingMachineHashScope) {
       case "vault":
-        return sha256Hash(`vault:${this.app.vault.getName()}`);
+        return sha256Hash(`vault:${this.host.vaultName}`);
       case "install-vault":
         return sha256Hash(JSON.stringify({
           installId: settings.loggingMachineId,
-          vaultName: this.app.vault.getName(),
+          vaultName: this.host.vaultName,
         }));
       case "install":
         return sha256Hash(settings.loggingMachineId);
@@ -251,16 +263,16 @@ export class lotusLogger {
   }
 
   private async appendVaultText(rawPath: string, content: string): Promise<void> {
-    const path = normalizeVaultLogPath(this.app.vault.configDir, rawPath);
+    const path = normalizeVaultLogPath(this.host.configDir, rawPath);
     if (!path) {
       return;
     }
 
     await this.ensureVaultParentFolder(path);
-    if (await this.app.vault.adapter.exists(path)) {
-      await this.app.vault.adapter.append(path, content);
+    if (await this.host.exists(path)) {
+      await this.host.append(path, content);
     } else {
-      await this.app.vault.adapter.write(path, content);
+      await this.host.write(path, content);
     }
   }
 
@@ -273,8 +285,8 @@ export class lotusLogger {
     let current = "";
     for (const part of folder.split("/").filter(Boolean)) {
       current = current ? `${current}/${part}` : part;
-      if (!(await this.app.vault.adapter.exists(current))) {
-        await this.app.vault.adapter.mkdir(current);
+      if (!(await this.host.exists(current))) {
+        await this.host.mkdir(current);
       }
     }
   }
@@ -320,7 +332,7 @@ export class lotusLogger {
     }
 
     const child = spawn(executable, args, {
-      cwd: getVaultBasePath(this.app),
+      cwd: this.host.vaultBasePath,
       stdio: ["pipe", "ignore", "pipe"],
       shell: false,
     });
@@ -350,13 +362,7 @@ export class lotusLogger {
   }
 
   private async writeHttpSink(endpoint: string, event: lotusLogEvent, rawHeaders: string): Promise<void> {
-    await requestUrl({
-      url: endpoint.trim(),
-      method: "POST",
-      contentType: "application/json",
-      headers: parseHeaderJson(rawHeaders),
-      body: JSON.stringify(event),
-    });
+    await this.host.postJson(endpoint.trim(), parseHeaderJson(rawHeaders), JSON.stringify(event));
   }
 }
 
@@ -381,7 +387,7 @@ function normalizeVaultLogPath(configDir: string, rawPath: string): string | nul
     return null;
   }
 
-  const path = normalizePath(trimmed.startsWith("/") ? trimmed.slice(1) : trimmed);
+  const path = normalizeVaultPath(trimmed.startsWith("/") ? trimmed.slice(1) : trimmed);
   const parts = path.split("/").filter(Boolean);
   if (!parts.length || parts.includes("..") || path === configDir || path.startsWith(`${configDir}/`) || path === ".git" || path.startsWith(".git/")) {
     return null;
@@ -514,7 +520,3 @@ function createLogId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function getVaultBasePath(app: App): string | undefined {
-  const adapter = app.vault.adapter as { basePath?: string };
-  return adapter.basePath;
-}

@@ -1,7 +1,10 @@
 import { dirname, isAbsolute, join } from "path";
-import { normalizePath, type App, type TFile } from "obsidian";
-import type { lotusCodeBlock, lotusExecutionContextOverride, lotusPluginSettings, lotusResolvedExecutionContext } from "./types";
+import { normalizeVaultPath } from "./utils/vaultPath";
+import type { lotusCodeBlock, lotusExecutionContextOverride, lotusPluginSettings, lotusResolvedExecutionContext, lotusRunFile } from "./types";
+import type { lotusVaultHost } from "./vaultHost";
 import { readFrontmatterTimeoutMs } from "./utils/timeout";
+
+export type lotusExecutionContextHost = Pick<lotusVaultHost, "readFrontmatter" | "vaultBasePath">;
 
 interface NoteExecutionContext {
   containerGroup?: string;
@@ -11,13 +14,13 @@ interface NoteExecutionContext {
 }
 
 export function resolveExecutionContext(
-  app: App,
-  file: TFile,
+  host: lotusExecutionContextHost,
+  file: lotusRunFile,
   block: lotusCodeBlock,
   settings: lotusPluginSettings,
 ): lotusResolvedExecutionContext {
-  const note = readNoteExecutionContext(app, file);
-  const vaultBasePath = readVaultBasePath(file);
+  const note = readNoteExecutionContext(host, file);
+  const vaultBasePath = host.vaultBasePath ?? "";
   const defaultWorkingDirectory = resolveDefaultWorkingDirectory(file, settings, vaultBasePath);
   const noteWorkingDirectory = resolveWorkingDirectoryOverride(note.workingDirectory, vaultBasePath);
   const blockWorkingDirectory = resolveWorkingDirectoryOverride(block.executionContext.workingDirectory, vaultBasePath);
@@ -73,9 +76,8 @@ function resolveContainerSource(
   return "none";
 }
 
-function readNoteExecutionContext(app: App, file: TFile): NoteExecutionContext {
-  const rawFrontmatter: unknown = app.metadataCache.getFileCache(file)?.frontmatter;
-  const frontmatter = isRecord(rawFrontmatter) ? rawFrontmatter : null;
+function readNoteExecutionContext(host: lotusExecutionContextHost, file: lotusRunFile): NoteExecutionContext {
+  const frontmatter = host.readFrontmatter(file.path) ?? null;
   if (!frontmatter) {
     return {};
   }
@@ -92,7 +94,7 @@ function readNoteExecutionContext(app: App, file: TFile): NoteExecutionContext {
   };
 }
 
-function resolveDefaultWorkingDirectory(file: TFile, settings: lotusPluginSettings, vaultBasePath: string): string {
+function resolveDefaultWorkingDirectory(file: lotusRunFile, settings: lotusPluginSettings, vaultBasePath: string): string {
   if (settings.workingDirectory.trim()) {
     return resolveConfiguredWorkingDirectory(settings.workingDirectory, vaultBasePath);
   }
@@ -107,7 +109,7 @@ function resolveWorkingDirectoryOverride(value: string | undefined, vaultBasePat
 }
 
 function resolveConfiguredWorkingDirectory(value: string, vaultBasePath: string): string {
-  const configured = normalizePath(value.trim());
+  const configured = normalizeVaultPath(value.trim());
   if (configured === ".") {
     return vaultBasePath || process.cwd();
   }
@@ -115,14 +117,6 @@ function resolveConfiguredWorkingDirectory(value: string, vaultBasePath: string)
     return configured;
   }
   return vaultBasePath ? join(vaultBasePath, configured) : configured;
-}
-
-function readVaultBasePath(file: TFile): string {
-  return (file.vault.adapter as { basePath?: string }).basePath ?? "";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function isDisabledValue(value: string): boolean {

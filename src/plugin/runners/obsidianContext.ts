@@ -1,8 +1,8 @@
 import { dirname } from "path";
-import { Notice, normalizePath, type App, type TFile } from "obsidian";
-import type { lotusCodeBlock, lotusDisplayOutput, lotusDisplayRole, lotusPluginSettings, lotusRunContext, lotusRunResult, lotusRunner } from "../types";
-import { formatTimeoutMs } from "../utils/timeout";
-import { lotusClearTimeout, lotusSetTimeout, type LotusTimeoutHandle } from "../utils/timers";
+import { Notice, TFile, normalizePath, type App } from "obsidian";
+import type { lotusCodeBlock, lotusDisplayOutput, lotusDisplayRole, lotusPluginSettings, lotusRunContext, lotusRunResult, lotusRunner } from "../../engine/types";
+import { formatTimeoutMs } from "../../engine/utils/timeout";
+import { lotusClearTimeout, lotusSetTimeout, type LotusTimeoutHandle } from "../../engine/utils/timers";
 import {
   CYTOSCAPE_MIME,
   ELK_MIME,
@@ -104,13 +104,17 @@ export class ObsidianContextRunner implements lotusRunner {
         `"use strict";\n${block.content}`,
       );
       const capturedConsole = createCapturedConsole(stdout, stderr);
-      const note = createNoteHelper(this.host.app, context.file);
-      const display = createDisplayHelper(this.host.app, context.file, displays);
+      const file = context.file instanceof TFile ? context.file : null;
+      if (!file) {
+        throw new Error("Obsidian context blocks require an Obsidian note file.");
+      }
+      const note = createNoteHelper(this.host.app, file);
+      const display = createDisplayHelper(this.host.app, file, displays);
       const execution = Promise.resolve(userFunction.call(
         this.host.plugin,
         this.host.app,
         this.host.plugin,
-        context.file,
+        file,
         block,
         Notice,
         capturedConsole,
