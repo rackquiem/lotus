@@ -83,7 +83,7 @@ export function resolveDynamicInputValues(
   inputs: lotusDynamicInput[],
   current: Readonly<Record<string, string>> = {},
 ): Record<string, string> {
-  const values: Record<string, string> = Object.create(null);
+  const values = Object.create(null) as Record<string, string>;
   for (const input of inputs) {
     if (!input.name || input.name in values) {
       continue;

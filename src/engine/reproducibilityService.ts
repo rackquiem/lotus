@@ -1,5 +1,5 @@
 
-import { readNoteOrThrow, type lotusVaultHost } from "./vaultHost";
+import { readNoteOrThrow } from "./vaultHost";
 import type { lotusServiceHost } from "./serviceHost";
 import type { lotusEventLog } from "./eventLog";
 import { parseMarkdownCodeBlocks } from "./parser";

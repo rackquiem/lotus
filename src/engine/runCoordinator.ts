@@ -1,5 +1,5 @@
 
-import { ensureVaultParentFolder, readNoteOrThrow, type lotusNoteInfo, type lotusVaultHost } from "./vaultHost";
+import { ensureVaultParentFolder, readNoteOrThrow } from "./vaultHost";
 import { normalizeVaultPath, sanitizeArtifactSegment } from "./utils/vaultPath";
 import { EXECUTION_DISABLED_MESSAGE } from "./serviceHost";
 import type { lotusRunCoordinatorHost } from "./serviceHost";

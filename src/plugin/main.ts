@@ -1,14 +1,13 @@
 import { MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf, normalizePath, parseYaml, requestUrl, type DataAdapter, type MarkdownPostProcessorContext } from "obsidian";
 import { RangeSetBuilder } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
-import { dirname, join } from "path";
+import { join } from "path";
 import { lotusContainerRunner, type lotusContainerGroupSummary } from "../engine/execution/containerRunner";
 import { isCompileContainerGroupAllowed, isCompileFeatureAllowed } from "../engine/buildProfile";
 import { addLlvmDecorations, highlightLlvmElement } from "./llvmHighlight";
-import { lotusLogger, type lotusLogHost } from "../engine/logging";
+import { lotusLogger } from "../engine/logging";
 import { resolveBlockHighlightLanguage } from "../engine/languageHighlight";
 import { findBlockAtLine, normalizeLanguage, parseMarkdownCodeBlocks } from "../engine/parser";
-import { findEnabledCommandLanguage } from "../engine/languagePackages";
 import { ObsidianContextRunner } from "./runners/obsidianContext";
 import { CustomLanguageRunner } from "../engine/runners/custom";
 import { createBuiltInRunners } from "../engine/runners/builtIn";
@@ -25,10 +24,9 @@ import { sha256Hash } from "../engine/utils/hash";
 import { isRecord } from "../engine/utils/record";
 import { formatErrorMessage } from "../engine/utils/errors";
 import { LOTUS_MANAGED_DISPLAY_LANGUAGE, parseManagedDisplaySource } from "../engine/managedOutput";
-import { readSignatureRecord, type lotusSignatureRecord } from "../engine/signing";
-import { canonicalizeNoteForHash, readHashPolicy, readReproducibilityFrontmatter, readStoredNoteHash, readStoredSignatureValue, setFrontmatterYamlParser } from "../engine/reproducibility";
+import { canonicalizeNoteForHash, readHashPolicy, readReproducibilityFrontmatter, readStoredNoteHash, setFrontmatterYamlParser } from "../engine/reproducibility";
 import { lotusApiServer, readApiLogEvents, type lotusApiHost } from "../engine/apiServer";
-import type { lotusCodeBlock, lotusDisplayRenderer, lotusExternalLanguagePack, lotusPluginSettings, lotusStoredOutput } from "../engine/types";
+import type { lotusCodeBlock, lotusDisplayRenderer, lotusExternalLanguagePack, lotusPluginSettings } from "../engine/types";
 import { createHtmlExportSummary, formatByteSize, lotusHtmlExportSummaryModal, renderLotusHtmlExport, type lotusHtmlExportSummary } from "./htmlExport";
 import { LANGUAGE_PACK_MANIFEST_NAMES, findBundleManifest, isPathWithin, normalizeBundleEntries, normalizeManifestId, parseExternalLanguagePack, readBundleManifest, readLanguageBundleArchive, readString, toArrayBuffer } from "../engine/languagePackBundle";
 import { normalizeSettings, readStoredSettings } from "../engine/settingsNormalize";
@@ -282,7 +280,7 @@ export default class lotusPlugin extends Plugin {
 
     this.addCommand({
       id: "export-current-note-html",
-      name: "Export current note as Lotus HTML",
+      name: "Export current note as HTML",
       editorCheckCallback: (checking, editor, view) => {
         const file = view.file;
         if (!file) {
@@ -297,7 +295,7 @@ export default class lotusPlugin extends Plugin {
 
     this.addCommand({
       id: "open-last-html-export",
-      name: "Open last Lotus HTML export",
+      name: "Open last HTML export",
       checkCallback: (checking) => {
         if (!this.lastHtmlExport) {
           return false;
@@ -311,7 +309,7 @@ export default class lotusPlugin extends Plugin {
 
     this.addCommand({
       id: "copy-last-html-export-path",
-      name: "Copy last Lotus HTML export path",
+      name: "Copy last HTML export path",
       checkCallback: (checking) => {
         if (!this.lastHtmlExport) {
           return false;
@@ -1591,8 +1589,7 @@ export default class lotusPlugin extends Plugin {
 
   private createDynamicInputPanel(block: lotusCodeBlock): HTMLElement {
     const parsed = parseDynamicInputDirectives(block.content);
-    const panel = activeDocument.createElement("div");
-    panel.className = "lotus-dynamic-input-panel";
+    const panel = createEl("div", { cls: "lotus-dynamic-input-panel" });
 
     if (parsed.errors.length) {
       const errors = panel.createDiv({ cls: "lotus-dynamic-input-errors" });
@@ -1649,8 +1646,7 @@ export default class lotusPlugin extends Plugin {
     input: lotusDynamicInput,
     values: Record<string, string>,
   ): HTMLElement {
-    const field = activeDocument.createElement("label");
-    field.className = `lotus-dynamic-input-field is-${input.kind}`;
+    const field = createEl("label", { cls: `lotus-dynamic-input-field is-${input.kind}` });
     field.createSpan({ cls: "lotus-dynamic-input-label", text: input.label });
     const name = input.name!;
     const currentValue = values[name] ?? input.defaultValue;
@@ -1738,8 +1734,7 @@ export default class lotusPlugin extends Plugin {
   }
 
   private createStdinPanel(block: lotusCodeBlock): HTMLElement {
-    const panel = activeDocument.createElement("div");
-    panel.className = "lotus-stdin-panel";
+    const panel = createEl("div", { cls: "lotus-stdin-panel" });
     const isFunctionInput = this.runs.isFunctionInputBlock(block);
 
     const header = panel.createDiv({ cls: "lotus-stdin-header" });

@@ -10,7 +10,7 @@ import type { lotusCodeBlock, lotusPluginSettings, lotusRunContext, lotusRunResu
 import { lotusClearTimeout, lotusSetTimeout } from "../utils/timers";
 import type { lotusTimeoutMs } from "../utils/timeout";
 import { readContainerConfig, requireCustomConfig, requireQemuConfig, requireSshConfig, runtimeLabel, type lotusCommandExpectation, type lotusContainerConfig, type lotusContainerElevationConfig, type lotusContainerLanguageConfig, type lotusContainerRuntime, type lotusCustomRuntimeConfig, type lotusOutputFilterConfig, type lotusQemuConfig, type lotusQemuManagerConfig, type lotusRemoteConfig } from "./containerConfig";
-import { readHttpPath, runHttpGroup, type lotusHttpConfig, type lotusRequestUrl } from "./httpGroup";
+import { runHttpGroup, type lotusHttpConfig, type lotusRequestUrl } from "./httpGroup";
 import { normalizeExtension } from "./configValues";
 import { BUILT_IN_GODBOLT_GROUP, isBuiltInGodboltGroup, runGodboltGroup } from "./godboltGroup";
 

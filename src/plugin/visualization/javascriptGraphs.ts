@@ -18,7 +18,6 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const GRAPH_BLACK = "#111111";
 const GRAPH_WHITE = "#ffffff";
 const GRAPH_BORDER = "#111111";
-const GRAPH_GRID = "#e5e5e5";
 let graphIdCounter = 0;
 let jsxGraphLoad: Promise<JsxGraphModule> | undefined;
 let cytoscapeLoad: Promise<CytoscapeModule> | undefined;
@@ -896,43 +895,7 @@ function appendSvgText(
   return text;
 }
 
-function applyMonochromeSchematicTheme(svg: SVGSVGElement): void {
-  const backgroundRects = findSchematicBackgroundRects(svg);
-  svg.querySelectorAll("rect, polygon").forEach((element) => {
-    if (backgroundRects.has(element)) {
-      element.setAttribute("fill", GRAPH_WHITE);
-      element.setAttribute("stroke", GRAPH_GRID);
-      return;
-    }
-    element.setAttribute("fill", GRAPH_BLACK);
-    element.setAttribute("stroke", GRAPH_BLACK);
-  });
-  svg.querySelectorAll("path, line, polyline").forEach((element) => {
-    element.setAttribute("stroke", GRAPH_BLACK);
-  });
-  svg.querySelectorAll("text").forEach((element) => {
-    element.setAttribute("fill", GRAPH_WHITE);
-  });
-}
 
-function findSchematicBackgroundRects(svg: SVGSVGElement): Set<Element> {
-  const backgroundRects = new Set<Element>();
-  const viewBox = svg.viewBox.baseVal;
-  const viewBoxArea = viewBox.width > 0 && viewBox.height > 0 ? viewBox.width * viewBox.height : 0;
-  if (!viewBoxArea) {
-    return backgroundRects;
-  }
-
-  svg.querySelectorAll("rect").forEach((rect) => {
-    const width = Number.parseFloat(rect.getAttribute("width") ?? "0");
-    const height = Number.parseFloat(rect.getAttribute("height") ?? "0");
-    const className = rect.getAttribute("class") ?? "";
-    if (className.includes("background") || width * height > viewBoxArea * 0.55) {
-      backgroundRects.add(rect);
-    }
-  });
-  return backgroundRects;
-}
 
 function svgElement<K extends keyof SVGElementTagNameMap>(tagName: K): SVGElementTagNameMap[K] {
   return activeDocument.createElementNS(SVG_NS, tagName);
@@ -965,11 +928,8 @@ function addDataUrlPrintSnapshot(surface: HTMLElement, src: string, alt: string)
   if (!src || surface.querySelector(".lotus-js-graph-print-snapshot")) {
     return;
   }
-  const image = activeDocument.createElement("img");
-  image.className = "lotus-js-graph-print-snapshot";
-  image.src = src;
-  image.alt = alt;
-  surface.appendChild(image);
+  surface.createEl("img", { cls: "lotus-js-graph-print-snapshot", attr: { src, alt } });
+  surface.addClass("lotus-js-graph-has-print-snapshot");
 }
 
 function readRecordPayload(value: unknown): Record<string, unknown> {

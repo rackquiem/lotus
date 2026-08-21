@@ -479,7 +479,7 @@ async function waitForGodboltResponse<T>(request: Promise<T>, timeoutMs: lotusTi
     }
     request.then(
       (response) => finish(() => resolve(response)),
-      (error: unknown) => finish(() => reject(error)),
+      (error: unknown) => finish(() => reject(error instanceof Error ? error : new Error(String(error)))),
     );
   });
 }

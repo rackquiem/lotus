@@ -34,8 +34,7 @@ export class lotusToolbarRenderChild extends MarkdownRenderChild {
     if (this.plugin.settings.pdfExportMode === "code") {
       hostClasses.push("lotus-print-hide-output");
     }
-    this.panelContainer = activeDocument.createElement("div");
-    this.panelContainer.className = hostClasses.join(" ");
+    this.panelContainer = createEl("div", { cls: hostClasses.join(" ") });
     this.codeElement.insertAdjacentElement("afterend", this.panelContainer);
 
     this.plugin.renderOutputInto(this.block, this.panelContainer);
@@ -93,8 +92,7 @@ export class lotusOutputWidget extends WidgetType {
   }
 
   toDOM(): HTMLElement {
-    const wrapper = activeDocument.createElement("div");
-    wrapper.className = "lotus-inline-output-host";
+    const wrapper = createEl("div", { cls: "lotus-inline-output-host" });
     this.plugin.renderOutputInto(this.block, wrapper);
     return wrapper;
   }

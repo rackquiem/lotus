@@ -1083,7 +1083,7 @@
   }
 
   body .lotus-js-graph-print-snapshot ~ *,
-  body .lotus-js-graph-surface:has(.lotus-js-graph-print-snapshot) > :not(.lotus-js-graph-print-snapshot) {
+  body .lotus-js-graph-surface.lotus-js-graph-has-print-snapshot > :not(.lotus-js-graph-print-snapshot) {
     display: none;
   }
 
@@ -1097,7 +1097,6 @@
 
   body .lotus-managed-display,
   body .lotus-managed-display .lotus-output-display {
-    break-inside: avoid;
     page-break-inside: avoid;
   }
 }

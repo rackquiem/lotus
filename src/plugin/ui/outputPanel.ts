@@ -37,8 +37,7 @@ function getStatusKind(output: lotusStoredOutput): "success" | "warning" | "fail
 }
 
 export function createOutputPanel(output: lotusStoredOutput, options: lotusOutputPanelOptions): HTMLDivElement {
-  const panel = activeDocument.createElement("div");
-  panel.className = `lotus-output-panel is-${getStatusKind(output)}${output.visible ? "" : " is-hidden"}`;
+  const panel = createEl("div", { cls: `lotus-output-panel is-${getStatusKind(output)}${output.visible ? "" : " is-hidden"}` });
   panel.dataset.lotusBlockId = output.blockId;
   renderOutputPanel(panel, output, options);
   return panel;
@@ -145,10 +144,7 @@ function openArtifact(artifact: lotusRunArtifact): void {
 
 function downloadArtifact(artifact: lotusRunArtifact): void {
   const url = createArtifactObjectUrl(artifact);
-  const link = activeDocument.createElement("a");
-  link.href = url;
-  link.download = artifact.name || "artifact";
-  activeDocument.body.appendChild(link);
+  const link = activeDocument.body.createEl("a", { href: url, attr: { download: artifact.name || "artifact" } });
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
@@ -244,23 +240,7 @@ async function writeClipboardText(content: string): Promise<void> {
     return;
   }
 
-  const textarea = activeDocument.createElement("textarea");
-  textarea.value = content;
-  textarea.setCssStyles({
-    position: "fixed",
-    left: "-9999px",
-    top: "0",
-  });
-  activeDocument.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-  try {
-    if (!activeDocument.execCommand("copy")) {
-      throw new Error("clipboard command failed");
-    }
-  } finally {
-    textarea.remove();
-  }
+  throw new Error("Clipboard is not available.");
 }
 
 function createDisplay(
@@ -482,8 +462,7 @@ function openImageFullscreen(
   height: number | undefined,
   initialZoom: number,
 ): void {
-  const overlay = activeDocument.createElement("div");
-  overlay.className = "lotus-output-image-fullscreen";
+  const overlay = createEl("div", { cls: "lotus-output-image-fullscreen" });
   overlay.tabIndex = -1;
 
   const shell = overlay.createDiv({ cls: "lotus-output-image-fullscreen-shell" });
@@ -892,8 +871,7 @@ function formatStreamKind(label: string, language: string | undefined, role: "ou
 }
 
 export function createRunningPanel(options: lotusRunningPanelOptions = {}): HTMLDivElement {
-  const panel = activeDocument.createElement("div");
-  panel.className = "lotus-output-panel is-running";
+  const panel = createEl("div", { cls: "lotus-output-panel is-running" });
 
   const header = panel.createDiv({ cls: "lotus-output-header" });
   const spinner = header.createDiv({ cls: "lotus-spinner" });

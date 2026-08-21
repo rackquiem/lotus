@@ -277,7 +277,7 @@ async function waitForHttpResponse<T>(request: Promise<T>, timeoutMs: lotusTimeo
     }
     request.then(
       (response) => finish(() => resolve(response)),
-      (error: unknown) => finish(() => reject(error)),
+      (error: unknown) => finish(() => reject(error instanceof Error ? error : new Error(String(error)))),
     );
   });
 }
