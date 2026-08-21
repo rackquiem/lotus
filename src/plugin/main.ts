@@ -1,34 +1,19 @@
-import {
-  MarkdownRenderChild,
-  MarkdownView,
-  Modal,
-  Notice,
-  Plugin,
-  Setting,
-  TFile,
-  WorkspaceLeaf,
-  normalizePath,
-  parseYaml,
-  requestUrl,
-  type DataAdapter,
-  type MarkdownPostProcessorContext,
-} from "obsidian";
-import { RangeSetBuilder, StateEffect } from "@codemirror/state";
-import { Decoration, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
+import { MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf, normalizePath, parseYaml, requestUrl, type DataAdapter, type MarkdownPostProcessorContext } from "obsidian";
+import { RangeSetBuilder } from "@codemirror/state";
+import { Decoration, EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
 import { readFile } from "fs/promises";
-import JSZip from "jszip";
 import { dirname, isAbsolute, join } from "path";
 import { homedir } from "os";
 import { lotusContainerRunner, type lotusContainerGroupSummary } from "../engine/execution/containerRunner";
 import { runProcess } from "../engine/execution/processRunner";
-import { getCompileMachineHashScopeOverride, isCompileContainerGroupAllowed, isCompileFeatureAllowed, isCompileLoggingForced } from "../engine/buildProfile";
+import { isCompileContainerGroupAllowed, isCompileFeatureAllowed } from "../engine/buildProfile";
 import { resolveExecutionContext as resolveLotusExecutionContext } from "./executionContext";
 import { addLlvmDecorations, highlightLlvmElement } from "./llvmHighlight";
 import { lotusLogger, type lotusLogHost, type lotusLogInput, type lotusLogTarget } from "../engine/logging";
 import { resolveBlockHighlightLanguage } from "../engine/languageHighlight";
 import { findBlockAtLine, normalizeLanguage, parseMarkdownCodeBlocks } from "../engine/parser";
 import { getLanguageCapability } from "../engine/languageCapabilities";
-import { findEnabledCommandLanguage, normalizeLanguageConfiguration } from "../engine/languagePackages";
+import { findEnabledCommandLanguage } from "../engine/languagePackages";
 import { ObsidianContextRunner } from "./runners/obsidianContext";
 import { CustomLanguageRunner } from "../engine/runners/custom";
 import { createBuiltInRunners } from "../engine/runners/builtIn";
@@ -38,101 +23,33 @@ import { lotusSettingTab, showExecutionDisabledNotice } from "./settings";
 import { resolveReferencedSource, type lotusExternalSourceExtractor } from "../engine/sourceExtract";
 import { runExternalSourcePreprocessorPipeline, type lotusExternalSourcePreprocessor, type lotusPreprocessorPipelineSpec } from "../engine/sourcePreprocess";
 import { buildSourceReferenceHarness } from "../engine/sourceHarness";
-import {
-  parseDynamicInputDirectives,
-  resolveDynamicInputValues,
-  substituteDynamicInputValues,
-  type lotusDynamicInput,
-} from "../engine/dynamicInputs";
+import { parseDynamicInputDirectives, resolveDynamicInputValues, substituteDynamicInputValues, type lotusDynamicInput } from "../engine/dynamicInputs";
 import { createCodeBlockToolbar } from "./ui/codeBlockToolbar";
 import { LOTUS_LOG_VIEW_TYPE, lotusLogView } from "./ui/logView";
 import { createOutputPanel, createRunningPanel, renderDisplayOutput } from "./ui/outputPanel";
 import { createSourceVisualizationDisplay, createStdoutVisualizationDisplay } from "../engine/visualization/codeGraph";
-import { LOTUS_D3_MIME, LOTUS_PLOTLY_MIME, PLOTLY_MIME, createJavaScriptGraphDisplayRenderers } from "./visualization/javascriptGraphs";
+import { createJavaScriptGraphDisplayRenderers } from "./visualization/javascriptGraphs";
 import { addSyntaxLanguageClass, highlightCodeElement, normalizeSyntaxLanguage } from "./syntaxHighlight";
 import { splitCommandLine } from "../engine/utils/command";
 import { sha256Hash } from "../engine/utils/hash";
+import { isRecord } from "../engine/utils/record";
 import { formatTimeoutLabel, formatTimeoutMs } from "../engine/utils/timeout";
 import { LOTUS_MANAGED_DISPLAY_LANGUAGE, parseManagedDisplaySource, renderManagedOutputMarkdown } from "../engine/managedOutput";
 import { assertRunnableCodePackage } from "../engine/codePackage";
 import { createOpenSshSignature, createPassphraseSignature, createRsaSignature, readSignatureRecord, verifyOpenSshSignature, verifyPassphraseSignature, verifyRsaSignature, type lotusSignatureRecord } from "../engine/signing";
-import {
-  CODE_BLOCK_HASHES_FRONTMATTER_KEY,
-  HASH_POLICY_FRONTMATTER_KEY,
-  HASH_POLICY_PRESETS,
-  NOTE_HASH_FRONTMATTER_KEY,
-  REPRODUCIBILITY_FRONTMATTER_KEY,
-  REPRODUCIBILITY_SNAPSHOT_VERSION,
-  SIGNATURE_FRONTMATTER_KEY,
-  canonicalizeNoteForHash,
-  compareCodeBlockHashEntries,
-  createCodeBlockHashEntry as buildCodeBlockHashEntry,
-  createReproducibilitySnapshot as buildReproducibilitySnapshot,
-  createSignaturePayload as buildSignaturePayload,
-  getHashPolicyPresetDefinition,
-  hashPolicyFromPreset,
-  readHashPolicy,
-  readReproducibilityFrontmatter,
-  readStoredCodeBlockHashEntries,
-  readStoredNoteHash,
-  readStoredSignatureValue,
-  serializeHashPolicy,
-  setFrontmatterYamlParser,
-  stableStringify,
-  type lotusCodeBlockHashEntry,
-  type lotusHashPolicy,
-  type lotusHashPolicyPreset,
-  type lotusReproducibilityStatus,
-  type lotusReproducibilityVerification,
-  type lotusReproducibilitySnapshot,
-  type lotusSignaturePayload,
-} from "../engine/reproducibility";
+import { CODE_BLOCK_HASHES_FRONTMATTER_KEY, HASH_POLICY_FRONTMATTER_KEY, NOTE_HASH_FRONTMATTER_KEY, REPRODUCIBILITY_FRONTMATTER_KEY, REPRODUCIBILITY_SNAPSHOT_VERSION, SIGNATURE_FRONTMATTER_KEY, canonicalizeNoteForHash, compareCodeBlockHashEntries, createCodeBlockHashEntry as buildCodeBlockHashEntry, createReproducibilitySnapshot as buildReproducibilitySnapshot, createSignaturePayload as buildSignaturePayload, getHashPolicyPresetDefinition, hashPolicyFromPreset, readHashPolicy, readReproducibilityFrontmatter, readStoredCodeBlockHashEntries, readStoredNoteHash, readStoredSignatureValue, serializeHashPolicy, setFrontmatterYamlParser, stableStringify, type lotusCodeBlockHashEntry, type lotusHashPolicy, type lotusHashPolicyPreset, type lotusReproducibilityStatus, type lotusReproducibilityVerification, type lotusReproducibilitySnapshot, type lotusSignaturePayload } from "../engine/reproducibility";
 import { apiBlockFromCodeBlock, apiRunFromStoredOutput, lotusApiServer, readApiLogEvents, type lotusApiBlock, type lotusApiLogEvent, type lotusApiNote, type lotusApiRun, type lotusApiRunner } from "../engine/apiServer";
-import type {
-  lotusCodeBlock,
-  lotusCustomPreprocessor,
-  lotusDisplayOutput,
-  lotusDisplayRenderer,
-  lotusExternalLanguage,
-  lotusExternalLanguagePack,
-  lotusHtmlExportGraphAssetMode,
-  lotusPluginSettings,
-  lotusResolvedExecutionContext,
-  lotusRunArtifact,
-  lotusStdinSession,
-  lotusStoredOutput,
-} from "../engine/types";
+import type { lotusCodeBlock, lotusDisplayOutput, lotusDisplayRenderer, lotusExternalLanguagePack, lotusPluginSettings, lotusResolvedExecutionContext, lotusStdinSession, lotusStoredOutput } from "../engine/types";
+import { createHtmlExportSummary, formatByteSize, lotusHtmlExportSummaryModal, renderLotusHtmlExport, type lotusHtmlExportSummary } from "./htmlExport";
+import { LANGUAGE_PACK_MANIFEST_NAMES, findBundleManifest, isPathWithin, normalizeBundleEntries, normalizeManifestId, parseExternalLanguagePack, readBundleManifest, readLanguageBundleArchive, readString, toArrayBuffer } from "../engine/languagePackBundle";
+import { normalizeSettings, readStoredSettings } from "../engine/settingsNormalize";
+import { readOutputFileTarget, renderOutputFileJson, renderOutputFileText } from "../engine/outputFiles";
+import { ExecutionConsentModal, ReproducibilityPolicyModal, SignatureMaterialModal, type lotusSignatureMaterial } from "./ui/modals";
+import { lotusOutputWidget, lotusRefreshEffect, lotusToolbarRenderChild, lotusToolbarWidget } from "./ui/editorWidgets";
 
-const lotusRefreshEffect = StateEffect.define<void>();
 const EXTERNAL_LANGUAGE_PACK_DIR = "language-packs";
-const LANGUAGE_PACK_MANIFEST_NAMES = new Set(["lotus-language-pack.json", "language-pack.json", "manifest.json"]);
-const SUPPORTED_PDF_EXPORT_MODES = new Set<lotusPluginSettings["pdfExportMode"]>(["both", "code", "output"]);
-const SUPPORTED_HTML_EXPORT_GRAPH_ASSET_MODES = new Set<lotusHtmlExportGraphAssetMode>(["cdn", "self-contained"]);
-const SUPPORTED_LOGGING_NOTE_PATH_MODES = new Set<lotusPluginSettings["loggingNotePathMode"]>(["plain", "hash", "omit"]);
-const SUPPORTED_LOGGING_MACHINE_HASH_SCOPES = new Set<lotusPluginSettings["loggingMachineHashScope"]>(["install", "vault", "install-vault"]);
-type lotusOutputFileMode = "replace" | "append";
-type lotusOutputFileFormat = "text" | "json";
-type lotusOutputFileStream = "stdout" | "stderr" | "warning" | "metadata" | "displays" | "artifacts";
+
 type lotusVisualizationMode = "graphviz" | "svg";
-
-interface lotusHtmlExportSummary {
-  path: string;
-  resourceUrl: string;
-  bytes: number;
-  blocks: number;
-  outputs: number;
-  displays: number;
-  artifacts: number;
-  graphAssetMode: lotusHtmlExportGraphAssetMode;
-}
-
-interface lotusSignatureMaterial {
-  mode: "passphrase" | "rsa" | "ssh";
-  passphrase?: string;
-  privateKeyPem?: string;
-  privateKeyPassphrase?: string;
-  rememberForSession?: boolean;
-}
 
 interface lotusLiveRunState {
   inputSession: lotusLiveStdinSession | null;
@@ -149,218 +66,6 @@ interface lotusRunBlockOptions {
   intent?: "run" | "transpile";
   visualize?: boolean;
   writePolicy?: string;
-}
-
-interface lotusOutputFileTarget {
-  path: string;
-  mode: lotusOutputFileMode;
-  format: lotusOutputFileFormat;
-  streams: lotusOutputFileStream[];
-}
-
-interface lotusArchiveEntry {
-  path: string;
-  data: Uint8Array;
-}
-
-class ExecutionConsentModal extends Modal {
-  constructor(
-    app: Plugin["app"],
-    private readonly onConfirm: () => Promise<void>,
-  ) {
-    super(app);
-  }
-
-  onOpen(): void {
-    const { contentEl } = this;
-    contentEl.empty();
-    contentEl.createEl("h2", { text: "Enable Lotus local execution?" });
-    contentEl.createEl("p", {
-      text: "Lotus runs code from your notes on your local machine using the configured executables. It does not sandbox or isolate the process.",
-    });
-
-    const actions = contentEl.createDiv({ cls: "lotus-modal-actions" });
-    const cancelButton = actions.createEl("button", { text: "Cancel" });
-    const enableButton = actions.createEl("button", { text: "Enable and run", cls: "mod-cta" });
-
-    cancelButton.addEventListener("click", () => this.close());
-    enableButton.addEventListener("click", () => {
-      void this.onConfirm().then(() => {
-        this.close();
-      });
-    });
-  }
-}
-
-class ReproducibilityPolicyModal extends Modal {
-  private selectedPreset: Exclude<lotusHashPolicyPreset, "custom">;
-  private descriptionEl: HTMLElement | null = null;
-
-  constructor(
-    app: Plugin["app"],
-    currentPolicy: lotusHashPolicy,
-    private readonly onChoose: (preset: Exclude<lotusHashPolicyPreset, "custom">) => Promise<void>,
-  ) {
-    super(app);
-    this.selectedPreset = currentPolicy.preset === "custom" ? "runtime-flexible" : currentPolicy.preset;
-  }
-
-  onOpen(): void {
-    const { contentEl } = this;
-    contentEl.empty();
-    contentEl.createEl("h2", { text: "Lotus reproducibility policy" });
-    contentEl.createEl("p", {
-      text: "Choose what may change without invalidating a saved reproducibility snapshot.",
-    });
-
-    this.descriptionEl = contentEl.createEl("p", { cls: "setting-item-description" });
-
-    new Setting(contentEl)
-      .setName("Policy preset")
-      .setDesc("Strict locks everything. Flexible presets allow selected execution plumbing to vary.")
-      .addDropdown((dropdown) => {
-        for (const preset of HASH_POLICY_PRESETS) {
-          dropdown.addOption(preset.id, preset.label);
-        }
-        dropdown.setValue(this.selectedPreset);
-        dropdown.onChange((value) => {
-          this.selectedPreset = value as Exclude<lotusHashPolicyPreset, "custom">;
-          this.renderPresetDescription();
-        });
-      });
-
-    const actions = contentEl.createDiv({ cls: "lotus-modal-actions" });
-    const cancelButton = actions.createEl("button", { text: "Cancel" });
-    const applyButton = actions.createEl("button", { text: "Apply policy", cls: "mod-cta" });
-    cancelButton.addEventListener("click", () => this.close());
-    applyButton.addEventListener("click", () => {
-      void this.onChoose(this.selectedPreset).then(() => {
-        this.close();
-      });
-    });
-
-    this.renderPresetDescription();
-  }
-
-  private renderPresetDescription(): void {
-    const preset = getHashPolicyPresetDefinition(this.selectedPreset);
-    if (this.descriptionEl) {
-      this.descriptionEl.setText(preset.description);
-    }
-  }
-}
-
-class SignatureMaterialModal extends Modal {
-  private settled = false;
-
-  constructor(
-    app: Plugin["app"],
-    private readonly options: {
-      title: string;
-      mode: "passphrase" | "rsa";
-      action: "sign" | "verify";
-      hasPrivateKeyPath: boolean;
-      cachedPassphrase?: string;
-      onSubmit: (material: lotusSignatureMaterial) => void;
-      onCancel: () => void;
-    },
-  ) {
-    super(app);
-  }
-
-  onOpen(): void {
-    const { contentEl } = this;
-    contentEl.empty();
-    contentEl.createEl("h2", { text: this.options.title });
-
-    if (this.options.mode === "passphrase") {
-      this.renderPassphraseForm(contentEl);
-    } else {
-      this.renderRsaForm(contentEl);
-    }
-  }
-
-  onClose(): void {
-    if (!this.settled) {
-      this.settled = true;
-      this.options.onCancel();
-    }
-  }
-
-  private renderPassphraseForm(contentEl: HTMLElement): void {
-    contentEl.createEl("p", {
-      text: this.options.action === "sign"
-        ? "Enter a passphrase. The passphrase is not stored; Lotus stores only the salt, KDF parameters, payload hash, and HMAC."
-        : "Enter the passphrase used to sign this note.",
-    });
-    const passphrase = createPasswordInput(contentEl, "Passphrase");
-    if (this.options.cachedPassphrase) {
-      passphrase.value = this.options.cachedPassphrase;
-    }
-    const confirm = this.options.action === "sign" ? createPasswordInput(contentEl, "Confirm passphrase") : null;
-    const remember = contentEl.createEl("label", { cls: "lotus-signing-session-cache" });
-    const rememberInput = remember.createEl("input", { attr: { type: "checkbox" } });
-    remember.createSpan({ text: "Keep in memory until Obsidian reloads" });
-    const error = contentEl.createDiv({ cls: "setting-item-description" });
-    this.renderActions(contentEl, () => {
-      if (!passphrase.value) {
-        error.setText("Passphrase is required.");
-        return;
-      }
-      if (confirm && passphrase.value !== confirm.value) {
-        error.setText("Passphrases do not match.");
-        return;
-      }
-      this.submit({ mode: "passphrase", passphrase: passphrase.value, rememberForSession: rememberInput.checked });
-    });
-  }
-
-  private renderRsaForm(contentEl: HTMLElement): void {
-    contentEl.createEl("p", {
-      text: this.options.hasPrivateKeyPath
-        ? "Lotus will read the configured private key file for signing. Enter a key passphrase only if the key is encrypted."
-        : "Paste an RSA private key PEM. The private key is used for this signing operation and is not stored.",
-    });
-    const privateKey = this.options.hasPrivateKeyPath
-      ? null
-      : contentEl.createEl("textarea", {
-        cls: "lotus-signing-key-input",
-        attr: {
-          rows: "8",
-          placeholder: "-----begin private key-----",
-        },
-      });
-    const keyPassphrase = createPasswordInput(contentEl, "Private key passphrase, if encrypted");
-    const error = contentEl.createDiv({ cls: "setting-item-description" });
-    this.renderActions(contentEl, () => {
-      if (privateKey && !privateKey.value.trim()) {
-        error.setText("Private key pem is required unless a private key file is configured.");
-        return;
-      }
-      this.submit({
-        mode: "rsa",
-        privateKeyPem: privateKey?.value,
-        privateKeyPassphrase: keyPassphrase.value,
-      });
-    });
-  }
-
-  private renderActions(contentEl: HTMLElement, submit: () => void): void {
-    const actions = contentEl.createDiv({ cls: "lotus-modal-actions" });
-    const cancelButton = actions.createEl("button", { text: "Cancel" });
-    const submitButton = actions.createEl("button", { text: this.options.action === "sign" ? "Sign" : "Verify", cls: "mod-cta" });
-    cancelButton.addEventListener("click", () => this.close());
-    submitButton.addEventListener("click", submit);
-  }
-
-  private submit(material: lotusSignatureMaterial): void {
-    if (this.settled) {
-      return;
-    }
-    this.settled = true;
-    this.options.onSubmit(material);
-    this.close();
-  }
 }
 
 class lotusLiveStdinSession implements lotusStdinSession {
@@ -400,97 +105,135 @@ class lotusLiveStdinSession implements lotusStdinSession {
   }
 }
 
-class lotusToolbarRenderChild extends MarkdownRenderChild {
-  private panelContainer: HTMLDivElement | null = null;
-  private toolbarElement: HTMLElement | null = null;
-  private unregisterOutputListener: (() => void) | null = null;
+function decodeEscapedAttribute(value: string): string {
+  return value.replace(/\\n/g, "\n").replace(/\\t/g, "\t");
+}
 
-  constructor(
-    containerEl: HTMLElement,
-    private readonly plugin: lotusPlugin,
-    private readonly block: lotusCodeBlock,
-    private readonly codeElement: HTMLElement,
-  ) {
-    super(containerEl);
+function trimLiveOutput(value: string): string {
+  const maxLength = 120_000;
+  if (value.length <= maxLength) {
+    return value;
   }
+  return value.slice(value.length - maxLength);
+}
 
-  onload(): void {
-    this.codeElement.classList.add("lotus-codeblock-shell");
-    this.toolbarElement = this.plugin.createToolbarElement(this.block);
-    this.codeElement.appendChild(this.toolbarElement);
+async function listLanguagePackManifestPaths(adapter: DataAdapter, root: string): Promise<string[]> {
+  const manifests: string[] = [];
 
-    if (this.plugin.settings.pdfExportMode === "output") {
-      this.codeElement.classList.add("lotus-print-hide-code");
-    }
-
-    const hostClasses = ["lotus-inline-output-host"];
-    if (this.plugin.settings.pdfExportMode === "code") {
-      hostClasses.push("lotus-print-hide-output");
-    }
-    this.panelContainer = activeDocument.createElement("div");
-    this.panelContainer.className = hostClasses.join(" ");
-    this.codeElement.insertAdjacentElement("afterend", this.panelContainer);
-
-    this.plugin.renderOutputInto(this.block, this.panelContainer);
-    this.unregisterOutputListener = this.plugin.registerOutputListener(this.block.id, () => {
-      if (this.panelContainer) {
-        this.plugin.renderOutputInto(this.block, this.panelContainer);
+  async function walk(folder: string, depth: number): Promise<void> {
+    const listed = await adapter.list(folder);
+    for (const file of listed.files) {
+      const lower = file.toLowerCase();
+      if (!lower.endsWith(".json")) {
+        continue;
       }
-    });
+
+      const relative = normalizePath(file.slice(root.length + 1));
+      const nested = relative.includes("/");
+      const fileName = relative.split("/").pop()?.toLowerCase() ?? "";
+      if (!nested || LANGUAGE_PACK_MANIFEST_NAMES.has(fileName)) {
+        manifests.push(file);
+      }
+    }
+
+    for (const child of listed.folders) {
+      if (depth < 4) {
+        await walk(child, depth + 1);
+      }
+    }
   }
 
-  onunload(): void {
-    this.unregisterOutputListener?.();
-    this.panelContainer?.remove();
-    this.toolbarElement?.remove();
-  }
+  await walk(root, 0);
+  return manifests;
 }
 
-class lotusToolbarWidget extends WidgetType {
-  private readonly isRunning: boolean;
-  private readonly showTranspile: boolean;
-  private readonly showVisualize: boolean;
-
-  constructor(
-    private readonly plugin: lotusPlugin,
-    private readonly block: lotusCodeBlock,
-  ) {
-    super();
-    this.isRunning = plugin.isBlockRunning(block.id);
-    this.showTranspile = plugin.shouldShowTranspileButton(block);
-    this.showVisualize = plugin.shouldShowCodeVisualizationButton();
-  }
-
-  eq(other: lotusToolbarWidget): boolean {
-    return other.block.id === this.block.id
-      && other.isRunning === this.isRunning
-      && other.showTranspile === this.showTranspile
-      && other.showVisualize === this.showVisualize;
-  }
-
-  toDOM(): HTMLElement {
-    return this.plugin.createToolbarElement(this.block);
-  }
+function readAdapterBasePath(adapter: DataAdapter): string {
+  const maybeAdapter = adapter as unknown as { basePath?: unknown };
+  return typeof maybeAdapter.basePath === "string"
+    ? maybeAdapter.basePath
+    : "";
 }
 
-class lotusOutputWidget extends WidgetType {
-  constructor(
-    private readonly plugin: lotusPlugin,
-    private readonly block: lotusCodeBlock,
-  ) {
-    super();
+function sanitizeArtifactSegment(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_.-]/g, "-")
+    .replace(/^-+|-+$/g, "") || "note";
+}
+
+function readStoredSignature(source: string): lotusSignatureRecord | null {
+  return readSignatureRecord(readStoredSignatureValue(source));
+}
+
+function getRenderedCodeElements(root: HTMLElement): HTMLElement[] {
+  const elements: HTMLElement[] = [];
+  if (root.matches("pre > code")) {
+    elements.push(root);
+  } else if (root.matches("pre")) {
+    const code = root.querySelector(":scope > code");
+    if (code instanceof HTMLElement) {
+      elements.push(code);
+    }
   }
 
-  eq(other: lotusOutputWidget): boolean {
-    return false;
-  }
+  elements.push(...Array.from(root.querySelectorAll<HTMLElement>("pre > code")));
+  return [...new Set(elements)];
+}
 
-  toDOM(): HTMLElement {
-    const wrapper = activeDocument.createElement("div");
-    wrapper.className = "lotus-inline-output-host";
-    this.plugin.renderOutputInto(this.block, wrapper);
-    return wrapper;
+function renderedCodeMatchesBlock(renderedSource: string, blockSource: string): boolean {
+  const renderedVariants = codeTextVariants(renderedSource);
+  const blockVariants = codeTextVariants(blockSource);
+  return renderedVariants.some((rendered) => blockVariants.includes(rendered));
+}
+
+function codeTextVariants(value: string): string[] {
+  const normalized = value.replace(/\r\n?/g, "\n");
+  const withoutSingleTrailingNewline = normalized.endsWith("\n") ? normalized.slice(0, -1) : normalized;
+  return normalized === withoutSingleTrailingNewline
+    ? [normalized]
+    : [normalized, withoutSingleTrailingNewline];
+}
+
+function formatSignatureScheme(scheme: string): string {
+  if (scheme === "rsa-pss-sha256") {
+    return "RSA-PSS/SHA-256";
   }
+  if (scheme === "openssh-sshsig") {
+    return "OpenSSH SSHSIG";
+  }
+  return "passphrase HMAC/SHA-256";
+}
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function appendWarning(existing: string | undefined, line: string): string {
+  return existing ? `${existing}\n${line}` : line;
+}
+
+function createObsidianLogHost(app: lotusPlugin["app"]): lotusLogHost {
+  const adapter = app.vault.adapter;
+  return {
+    get vaultName() {
+      return app.vault.getName();
+    },
+    get configDir() {
+      return app.vault.configDir;
+    },
+    get vaultBasePath() {
+      return (adapter as { basePath?: string }).basePath;
+    },
+    exists: (path) => adapter.exists(path),
+    read: (path) => adapter.read(path),
+    append: (path, content) => adapter.append(path, content),
+    write: (path, content) => adapter.write(path, content),
+    mkdir: (path) => adapter.mkdir(path),
+    postJson: async (url, headers, body) => {
+      await requestUrl({ url, method: "POST", contentType: "application/json", headers, body });
+    },
+  };
 }
 
 export default class lotusPlugin extends Plugin {
@@ -966,7 +709,7 @@ export default class lotusPlugin extends Plugin {
       ...loadedData,
     };
     await this.loadExternalLanguagePacks();
-    this.normalizeSettings();
+    normalizeSettings(this.settings);
     if (!hadMachineId) {
       const persistedSettings: Partial<lotusPluginSettings> = { ...this.settings };
       delete persistedSettings.externalLanguagePacks;
@@ -1062,7 +805,7 @@ export default class lotusPlugin extends Plugin {
   }
 
   async saveSettings(): Promise<void> {
-    this.normalizeSettings();
+    normalizeSettings(this.settings);
     const persistedSettings: Partial<lotusPluginSettings> = { ...this.settings };
     delete persistedSettings.externalLanguagePacks;
     await this.saveData(persistedSettings);
@@ -3289,91 +3032,6 @@ export default class lotusPlugin extends Plugin {
     }
   }
 
-  private normalizeSettings(): void {
-    normalizeLanguageConfiguration(this.settings);
-    this.settings.outputVisibleLines = normalizeNonNegativeInteger(this.settings.outputVisibleLines, DEFAULT_SETTINGS.outputVisibleLines, 2000);
-    this.settings.defaultTimeoutMs = normalizePositiveInteger(this.settings.defaultTimeoutMs, DEFAULT_SETTINGS.defaultTimeoutMs);
-    this.settings.hashCodeBlocks = this.settings.hashCodeBlocks ?? DEFAULT_SETTINGS.hashCodeBlocks;
-    if (this.settings.signingMode !== "passphrase" && this.settings.signingMode !== "rsa" && this.settings.signingMode !== "ssh") {
-      this.settings.signingMode = DEFAULT_SETTINGS.signingMode;
-    }
-    this.settings.signingSignerId = normalizeStringSetting(this.settings.signingSignerId, DEFAULT_SETTINGS.signingSignerId);
-    this.settings.signingPublicKey = typeof this.settings.signingPublicKey === "string"
-      ? this.settings.signingPublicKey
-      : DEFAULT_SETTINGS.signingPublicKey;
-    this.settings.signingPublicKeyPath = normalizeStringSetting(this.settings.signingPublicKeyPath, DEFAULT_SETTINGS.signingPublicKeyPath);
-    this.settings.signingSshKeyPath = normalizeStringSetting(this.settings.signingSshKeyPath, DEFAULT_SETTINGS.signingSshKeyPath);
-    this.settings.signingSshAuthSock = normalizeStringSetting(this.settings.signingSshAuthSock, DEFAULT_SETTINGS.signingSshAuthSock);
-    this.settings.signingSshAllowedSigners = typeof this.settings.signingSshAllowedSigners === "string"
-      ? this.settings.signingSshAllowedSigners
-      : DEFAULT_SETTINGS.signingSshAllowedSigners;
-    this.settings.signingSshAllowedSignersPath = normalizeStringSetting(this.settings.signingSshAllowedSignersPath, DEFAULT_SETTINGS.signingSshAllowedSignersPath);
-    this.settings.signingSshNamespace = normalizeStringSetting(this.settings.signingSshNamespace, DEFAULT_SETTINGS.signingSshNamespace);
-    this.settings.showObsidianContextWarning = this.settings.showObsidianContextWarning ?? DEFAULT_SETTINGS.showObsidianContextWarning;
-    if (!SUPPORTED_PDF_EXPORT_MODES.has(this.settings.pdfExportMode)) {
-      this.settings.pdfExportMode = DEFAULT_SETTINGS.pdfExportMode;
-    }
-    if (!SUPPORTED_HTML_EXPORT_GRAPH_ASSET_MODES.has(this.settings.htmlExportGraphAssetMode)) {
-      this.settings.htmlExportGraphAssetMode = DEFAULT_SETTINGS.htmlExportGraphAssetMode;
-    }
-    this.settings.loggingEnabled = isCompileLoggingForced() || Boolean(this.settings.loggingEnabled);
-    this.settings.loggingGlobalTextEnabled = this.settings.loggingGlobalTextEnabled == null
-      ? DEFAULT_SETTINGS.loggingGlobalTextEnabled
-      : Boolean(this.settings.loggingGlobalTextEnabled);
-    this.settings.loggingGlobalJsonlEnabled = this.settings.loggingGlobalJsonlEnabled == null
-      ? DEFAULT_SETTINGS.loggingGlobalJsonlEnabled
-      : Boolean(this.settings.loggingGlobalJsonlEnabled);
-    this.settings.loggingPerNoteTextEnabled = Boolean(this.settings.loggingPerNoteTextEnabled);
-    this.settings.loggingPerNoteJsonlEnabled = Boolean(this.settings.loggingPerNoteJsonlEnabled);
-    this.settings.loggingProcessEnabled = Boolean(this.settings.loggingProcessEnabled);
-    this.settings.loggingHttpEnabled = Boolean(this.settings.loggingHttpEnabled);
-    this.settings.loggingIncludeCode = Boolean(this.settings.loggingIncludeCode);
-    this.settings.loggingIncludeOutput = Boolean(this.settings.loggingIncludeOutput);
-    this.settings.loggingIncludeInput = Boolean(this.settings.loggingIncludeInput);
-    this.settings.loggingMachineId = normalizeMachineId(this.settings.loggingMachineId);
-    this.settings.loggingGlobalTextPath = normalizeStringSetting(this.settings.loggingGlobalTextPath, DEFAULT_SETTINGS.loggingGlobalTextPath);
-    this.settings.loggingGlobalJsonlPath = normalizeStringSetting(this.settings.loggingGlobalJsonlPath, DEFAULT_SETTINGS.loggingGlobalJsonlPath);
-    this.settings.loggingPerNoteTextPathPattern = normalizeStringSetting(this.settings.loggingPerNoteTextPathPattern, DEFAULT_SETTINGS.loggingPerNoteTextPathPattern);
-    this.settings.loggingPerNoteJsonlPathPattern = normalizeStringSetting(this.settings.loggingPerNoteJsonlPathPattern, DEFAULT_SETTINGS.loggingPerNoteJsonlPathPattern);
-    this.settings.loggingProcessCommand = normalizeStringSetting(this.settings.loggingProcessCommand, DEFAULT_SETTINGS.loggingProcessCommand);
-    this.settings.loggingHttpEndpoint = normalizeStringSetting(this.settings.loggingHttpEndpoint, DEFAULT_SETTINGS.loggingHttpEndpoint);
-    this.settings.loggingHttpHeaders = normalizeStringSetting(this.settings.loggingHttpHeaders, DEFAULT_SETTINGS.loggingHttpHeaders);
-    this.settings.loggingViewerJsonlPath = normalizeStringSetting(this.settings.loggingViewerJsonlPath, this.settings.loggingGlobalJsonlPath || DEFAULT_SETTINGS.loggingViewerJsonlPath);
-    this.settings.loggingRedactionRules = typeof this.settings.loggingRedactionRules === "string"
-      ? this.settings.loggingRedactionRules
-      : DEFAULT_SETTINGS.loggingRedactionRules;
-    if (!SUPPORTED_LOGGING_NOTE_PATH_MODES.has(this.settings.loggingNotePathMode)) {
-      this.settings.loggingNotePathMode = DEFAULT_SETTINGS.loggingNotePathMode;
-    }
-    const compileMachineHashScope = getCompileMachineHashScopeOverride();
-    if (compileMachineHashScope) {
-      this.settings.loggingMachineHashScope = compileMachineHashScope;
-    } else if (!SUPPORTED_LOGGING_MACHINE_HASH_SCOPES.has(this.settings.loggingMachineHashScope)) {
-      this.settings.loggingMachineHashScope = DEFAULT_SETTINGS.loggingMachineHashScope;
-    }
-    this.settings.loggingMaxEventBytes = normalizePositiveInteger(this.settings.loggingMaxEventBytes, DEFAULT_SETTINGS.loggingMaxEventBytes);
-    this.settings.apiEnabled = Boolean(this.settings.apiEnabled);
-    this.settings.apiHost = normalizeApiHost(this.settings.apiHost, DEFAULT_SETTINGS.apiHost);
-    this.settings.apiPort = normalizePort(this.settings.apiPort, DEFAULT_SETTINGS.apiPort);
-    this.settings.apiKeys = typeof this.settings.apiKeys === "string" ? this.settings.apiKeys : DEFAULT_SETTINGS.apiKeys;
-    this.settings.defaultContainerGroup = isCompileFeatureAllowed("container-groups")
-      ? normalizeStringSetting(this.settings.defaultContainerGroup, DEFAULT_SETTINGS.defaultContainerGroup)
-      : "";
-    if (this.settings.defaultContainerGroup && !isCompileContainerGroupAllowed(this.settings.defaultContainerGroup)) {
-      this.settings.defaultContainerGroup = "";
-    }
-    this.settings.godboltResolveCompilerFromApi = normalizeBooleanSetting(this.settings.godboltResolveCompilerFromApi, DEFAULT_SETTINGS.godboltResolveCompilerFromApi);
-    this.settings.godboltCompilerDefaults = normalizeStringSetting(this.settings.godboltCompilerDefaults, DEFAULT_SETTINGS.godboltCompilerDefaults);
-    this.settings.godboltOptionsDefaults = normalizeStringSetting(this.settings.godboltOptionsDefaults, DEFAULT_SETTINGS.godboltOptionsDefaults);
-    this.settings.workingDirectory = normalizeStringSetting(this.settings.workingDirectory, DEFAULT_SETTINGS.workingDirectory);
-    this.settings.graphvizExecutable = isCompileFeatureAllowed("rich-displays")
-      ? normalizeStringSetting(this.settings.graphvizExecutable, DEFAULT_SETTINGS.graphvizExecutable)
-      : "";
-    this.settings.showCodeVisualizationButton = isCompileFeatureAllowed("rich-displays")
-      ? normalizeBooleanSetting(this.settings.showCodeVisualizationButton, DEFAULT_SETTINGS.showCodeVisualizationButton)
-      : false;
-  }
-
   private getActiveMarkdownFile(): TFile | null {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     return view?.file ?? null;
@@ -3705,15 +3363,15 @@ export default class lotusPlugin extends Plugin {
 
   private async writeOutputFileIfRequested(file: TFile, block: lotusCodeBlock, result: lotusStoredOutput["result"]): Promise<void> {
     try {
-      const target = this.readOutputFileTarget(file, block);
+      const target = readOutputFileTarget(this.app.vault.configDir, file, block);
       if (!target) {
         return;
       }
 
       await this.ensureVaultParentFolder(target.path);
       const rendered = target.format === "json"
-        ? this.renderOutputFileJson(file, block, result, target)
-        : this.renderOutputFileText(result, target);
+        ? renderOutputFileJson(file, block, result, target)
+        : renderOutputFileText(result, target);
       const current = target.mode === "append" && await this.app.vault.adapter.exists(target.path)
         ? await this.app.vault.adapter.read(target.path)
         : "";
@@ -3749,82 +3407,6 @@ export default class lotusPlugin extends Plugin {
     }
   }
 
-  private readOutputFileTarget(file: TFile, block: lotusCodeBlock): lotusOutputFileTarget | null {
-    const rawPath = block.attributes["lotus-output-file"] ?? block.attributes["output-file"];
-    if (!rawPath?.trim()) {
-      return null;
-    }
-
-    return {
-      path: this.resolveOutputVaultPath(file, rawPath),
-      mode: this.readOutputFileMode(block),
-      format: this.readOutputFileFormat(block),
-      streams: this.readOutputFileStreams(block),
-    };
-  }
-
-  private readOutputFileMode(block: lotusCodeBlock): lotusOutputFileMode {
-    const append = block.attributes["lotus-output-append"] ?? block.attributes["output-append"];
-    if (append && !["0", "false", "no", "off"].includes(append.trim().toLowerCase())) {
-      return "append";
-    }
-
-    const mode = (block.attributes["lotus-output-file-mode"] ?? block.attributes["output-file-mode"] ?? "replace").trim().toLowerCase();
-    if (mode === "append") {
-      return "append";
-    }
-    if (mode === "replace") {
-      return "replace";
-    }
-    throw new Error(`Unsupported lotus-output-file-mode: ${mode}. Use replace or append.`);
-  }
-
-  private readOutputFileFormat(block: lotusCodeBlock): lotusOutputFileFormat {
-    const format = (block.attributes["lotus-output-file-format"] ?? block.attributes["output-file-format"] ?? "text").trim().toLowerCase();
-    if (format === "text" || format === "json") {
-      return format;
-    }
-    throw new Error(`Unsupported lotus-output-file-format: ${format}. Use text or json.`);
-  }
-
-  private readOutputFileStreams(block: lotusCodeBlock): lotusOutputFileStream[] {
-    const value = block.attributes["lotus-output-file-streams"] ?? block.attributes["output-file-streams"] ?? "stdout";
-    const parsed = value
-      .split(",")
-      .map((stream) => stream.trim().toLowerCase())
-      .filter(Boolean);
-    const expanded = parsed.includes("all")
-      ? ["metadata", "stdout", "warning", "stderr", ...(isCompileFeatureAllowed("rich-displays") ? ["displays"] : []), "artifacts"]
-      : parsed;
-    const streams = expanded.map((stream) => {
-      if (stream === "displays" && !isCompileFeatureAllowed("rich-displays")) {
-        throw new Error("lotus-output-file-streams=displays requires a build with the rich-displays feature.");
-      }
-      if (stream === "stdout" || stream === "stderr" || stream === "warning" || stream === "metadata" || stream === "displays" || stream === "artifacts") {
-        return stream;
-      }
-      throw new Error(`Unsupported lotus-output-file-streams entry: ${stream}.`);
-    });
-    return streams.length ? [...new Set(streams)] : ["stdout"];
-  }
-
-  private resolveOutputVaultPath(file: TFile, rawPath: string): string {
-    const trimmed = rawPath.trim();
-    if (!trimmed || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
-      throw new Error("lotus-output-file must be a vault-relative path.");
-    }
-
-    const path = trimmed.startsWith("/")
-      ? normalizePath(trimmed.slice(1))
-      : normalizePath(dirname(file.path) === "." ? trimmed : `${dirname(file.path)}/${trimmed}`);
-    const parts = path.split("/").filter(Boolean);
-    const configDir = this.app.vault.configDir;
-    if (!parts.length || parts.includes("..") || path.startsWith(`${configDir}/`) || path === configDir || path.startsWith(".git/") || path === ".git") {
-      throw new Error(`Invalid lotus-output-file path: ${rawPath}`);
-    }
-    return path;
-  }
-
   private async ensureVaultParentFolder(path: string): Promise<void> {
     const folder = dirname(path);
     if (!folder || folder === ".") {
@@ -3844,65 +3426,14 @@ export default class lotusPlugin extends Plugin {
     }
   }
 
-  private renderOutputFileText(result: lotusStoredOutput["result"], target: lotusOutputFileTarget): string {
-    const sections = target.streams.flatMap((stream) => {
-      switch (stream) {
-        case "metadata":
-          return [
-            `runner=${result.runnerName}`,
-            `exit=${result.exitCode ?? "?"}`,
-            `duration=${result.durationMs}ms`,
-            `timestamp=${result.finishedAt}`,
-          ].join("\n");
-        case "stdout":
-          return result.stdout ? [result.stdout] : [];
-        case "warning":
-          return result.warning ? [result.warning] : [];
-        case "stderr":
-          return result.stderr ? [result.stderr] : [];
-        case "displays":
-          return result.displays?.length ? [JSON.stringify(result.displays, null, 2)] : [];
-        case "artifacts":
-          return result.artifacts?.length ? [JSON.stringify(result.artifacts, null, 2)] : [];
-      }
-    });
-    return `${sections.join("\n\n").replace(/\s*$/, "")}\n`;
-  }
-
-  private renderOutputFileJson(file: TFile, block: lotusCodeBlock, result: lotusStoredOutput["result"], target: lotusOutputFileTarget): string {
-    const payload = {
-      note: file.path,
-      blockId: block.id,
-      language: block.language,
-      runner: result.runnerName,
-      exitCode: result.exitCode,
-      success: result.success,
-      durationMs: result.durationMs,
-      startedAt: result.startedAt,
-      finishedAt: result.finishedAt,
-      streams: {
-        ...(target.streams.includes("stdout") ? {
-          stdout: result.stdout,
-          stdoutLanguage: result.stdoutLanguage ?? null,
-          stdoutRole: result.stdoutRole ?? null,
-        } : {}),
-        ...(target.streams.includes("warning") ? { warning: result.warning ?? "" } : {}),
-        ...(target.streams.includes("stderr") ? { stderr: result.stderr } : {}),
-        ...(target.streams.includes("displays") ? { displays: result.displays ?? [] } : {}),
-        ...(target.streams.includes("artifacts") ? { artifacts: result.artifacts ?? [] } : {}),
-      },
-    };
-    return `${JSON.stringify(payload, null, 2)}\n`;
-  }
-
   private async exportCurrentNoteHtml(file: TFile, source: string): Promise<void> {
     try {
       const targetPath = normalizePath(`.lotus/exports/${sanitizeArtifactSegment(file.path)}.html`);
       const blocks = parseMarkdownCodeBlocks(file.path, source, this.settings);
-      const html = this.renderLotusHtmlExport(file, source, blocks);
+      const html = renderLotusHtmlExport(this.outputs, this.settings.htmlExportGraphAssetMode, file, source, blocks);
       await this.ensureVaultParentFolder(targetPath);
       await this.app.vault.adapter.write(targetPath, html);
-      const summary = this.createHtmlExportSummary(targetPath, html, blocks);
+      const summary = createHtmlExportSummary(this.outputs, this.getVaultResourceUrl(targetPath), this.settings.htmlExportGraphAssetMode, targetPath, html, blocks);
       this.lastHtmlExport = summary;
       new Notice(`Exported Lotus HTML: ${formatByteSize(summary.bytes)}, ${summary.blocks} blocks, ${summary.outputs} outputs.`);
       new lotusHtmlExportSummaryModal(this, summary).open();
@@ -3923,60 +3454,6 @@ export default class lotusPlugin extends Plugin {
     } catch (error) {
       new Notice(`Failed to export Lotus HTML: ${error instanceof Error ? error.message : String(error)}`);
     }
-  }
-
-  private renderLotusHtmlExport(file: TFile, source: string, blocks: lotusCodeBlock[]): string {
-    const lines = source.split(/\r?\n/);
-    const pieces: string[] = [];
-    let cursor = 0;
-    for (const block of blocks) {
-      if (block.startLine > cursor) {
-        pieces.push(renderMarkdownFragment(lines.slice(cursor, block.startLine).join("\n")));
-      }
-      pieces.push(renderExportCodeBlock(block));
-      const output = this.outputs.get(block.id);
-      if (output) {
-        pieces.push(renderExportOutput(output, this.settings.htmlExportGraphAssetMode));
-      }
-      cursor = block.endLine + 1;
-    }
-    if (cursor < lines.length) {
-      pieces.push(renderMarkdownFragment(lines.slice(cursor).join("\n")));
-    }
-
-    return [
-      "<!doctype html>",
-      "<html>",
-      "<head>",
-      "<meta charset=\"utf-8\">",
-      "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">",
-      `<title>${escapeHtml(file.basename || file.path)}</title>`,
-      `<style>${LOTUS_HTML_EXPORT_CSS}</style>`,
-      "</head>",
-      "<body>",
-      "<main>",
-      `<header class="lotus-export-header"><h1>${escapeHtml(file.basename || file.path)}</h1><p>${escapeHtml(file.path)}</p></header>`,
-      pieces.filter((piece) => piece.trim()).join("\n"),
-      "</main>",
-      "</body>",
-      "</html>",
-    ].join("\n");
-  }
-
-  private createHtmlExportSummary(targetPath: string, html: string, blocks: lotusCodeBlock[]): lotusHtmlExportSummary {
-    const outputs = blocks
-      .map((block) => this.outputs.get(block.id))
-      .filter((output): output is lotusStoredOutput => Boolean(output));
-    return {
-      path: targetPath,
-      resourceUrl: this.getVaultResourceUrl(targetPath),
-      bytes: new TextEncoder().encode(html).byteLength,
-      blocks: blocks.length,
-      outputs: outputs.length,
-      displays: outputs.reduce((count, output) => count + (output.result.displays?.length ?? 0), 0),
-      artifacts: outputs.reduce((count, output) => count + (output.result.artifacts?.length ?? 0), 0),
-      graphAssetMode: this.settings.htmlExportGraphAssetMode,
-    };
   }
 
   private getVaultResourceUrl(path: string): string {
@@ -4275,1205 +3752,4 @@ export default class lotusPlugin extends Plugin {
     }
     return this.app.vault.cachedRead(inputFile);
   }
-}
-
-function decodeEscapedAttribute(value: string): string {
-  return value.replace(/\\n/g, "\n").replace(/\\t/g, "\t");
-}
-
-function trimLiveOutput(value: string): string {
-  const maxLength = 120_000;
-  if (value.length <= maxLength) {
-    return value;
-  }
-  return value.slice(value.length - maxLength);
-}
-
-async function listLanguagePackManifestPaths(adapter: DataAdapter, root: string): Promise<string[]> {
-  const manifests: string[] = [];
-
-  async function walk(folder: string, depth: number): Promise<void> {
-    const listed = await adapter.list(folder);
-    for (const file of listed.files) {
-      const lower = file.toLowerCase();
-      if (!lower.endsWith(".json")) {
-        continue;
-      }
-
-      const relative = normalizePath(file.slice(root.length + 1));
-      const nested = relative.includes("/");
-      const fileName = relative.split("/").pop()?.toLowerCase() ?? "";
-      if (!nested || LANGUAGE_PACK_MANIFEST_NAMES.has(fileName)) {
-        manifests.push(file);
-      }
-    }
-
-    for (const child of listed.folders) {
-      if (depth < 4) {
-        await walk(child, depth + 1);
-      }
-    }
-  }
-
-  await walk(root, 0);
-  return manifests;
-}
-
-async function readLanguageBundleArchive(file: File): Promise<lotusArchiveEntry[]> {
-  const lowerName = file.name.toLowerCase();
-  const bytes = new Uint8Array(await file.arrayBuffer());
-
-  if (lowerName.endsWith(".zip")) {
-    return readZipBundle(bytes);
-  }
-  if (lowerName.endsWith(".tar")) {
-    return readTarBundle(bytes);
-  }
-  if (lowerName.endsWith(".tgz") || lowerName.endsWith(".tar.gz")) {
-    return readTarBundle(new Uint8Array(await gunzipBytes(bytes)));
-  }
-
-  throw new Error("Language bundle must be a .zip, .tar, .tgz, or .tar.gz archive.");
-}
-
-async function readZipBundle(bytes: Uint8Array): Promise<lotusArchiveEntry[]> {
-  const zip = await JSZip.loadAsync(bytes);
-  const entries: lotusArchiveEntry[] = [];
-
-  for (const entry of Object.values(zip.files)) {
-    if (entry.dir) {
-      continue;
-    }
-    entries.push({
-      path: entry.name,
-      data: await entry.async("uint8array"),
-    });
-  }
-
-  return entries;
-}
-
-function readTarBundle(bytes: Uint8Array): lotusArchiveEntry[] {
-  const entries: lotusArchiveEntry[] = [];
-  let offset = 0;
-
-  while (offset + 512 <= bytes.length) {
-    const header = bytes.slice(offset, offset + 512);
-    if (header.every((byte) => byte === 0)) {
-      break;
-    }
-
-    const name = readTarString(header, 0, 100);
-    const prefix = readTarString(header, 345, 155);
-    const path = prefix ? `${prefix}/${name}` : name;
-    const size = Number.parseInt(readTarString(header, 124, 12).trim() || "0", 8);
-    const type = String.fromCharCode(header[156] || 48);
-    const dataStart = offset + 512;
-    const dataEnd = dataStart + size;
-
-    if (!Number.isFinite(size) || size < 0 || dataEnd > bytes.length) {
-      throw new Error("Invalid tar archive entry size.");
-    }
-
-    if (type === "0" || type === "\0") {
-      entries.push({ path, data: bytes.slice(dataStart, dataEnd) });
-    }
-
-    offset = dataStart + Math.ceil(size / 512) * 512;
-  }
-
-  return entries;
-}
-
-async function gunzipBytes(bytes: Uint8Array): Promise<ArrayBuffer> {
-  const Decompression = typeof DecompressionStream === "undefined" ? undefined : DecompressionStream;
-  if (!Decompression) {
-    throw new Error("This Obsidian runtime cannot decompress tar.gz bundles. Use .zip or .tar instead.");
-  }
-
-  const stream = new Blob([toArrayBuffer(bytes)]).stream().pipeThrough(new Decompression("gzip"));
-  return new Response(stream).arrayBuffer();
-}
-
-function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
-  return copy.buffer;
-}
-
-function readTarString(bytes: Uint8Array, offset: number, length: number): string {
-  const end = bytes.indexOf(0, offset);
-  const sliceEnd = end >= offset && end < offset + length ? end : offset + length;
-  return new TextDecoder().decode(bytes.slice(offset, sliceEnd)).trim();
-}
-
-const LOTUS_HTML_EXPORT_CSS = `
-:root{color-scheme:light dark;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55;color:#1f2933;background:#f6f7f9}
-body{margin:0}
-main{box-sizing:border-box;width:min(100%,960px);margin:0 auto;padding:32px 20px 56px}
-.lotus-export-header{margin:0 0 28px;padding-bottom:16px;border-bottom:1px solid #d8dde5}
-.lotus-export-header h1{margin:0;font-size:1.8rem;line-height:1.2}
-.lotus-export-header p{margin:6px 0 0;color:#657080;font-size:.9rem}
-p{margin:0 0 1rem}
-h1,h2,h3,h4,h5,h6{margin:1.35rem 0 .6rem;line-height:1.2}
-ul{margin:.2rem 0 1rem;padding-left:1.35rem}
-hr{border:0;border-top:1px solid #d8dde5;margin:1.5rem 0}
-pre{overflow:auto;border-radius:8px;background:#101820;color:#eef4ff;padding:12px 14px;font-size:.88rem;line-height:1.45}
-code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.lotus-export-code{margin:1rem 0}
-.lotus-export-output{margin:1rem 0 1.5rem;padding:12px;border:1px solid #c8d8f0;border-radius:8px;background:#fff}
-.lotus-export-output-meta{margin:0 0 .7rem;color:#526070;font-size:.82rem}
-.lotus-export-stream{margin:.7rem 0}
-.lotus-export-label{margin:.2rem 0 .35rem;color:#526070;font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}
-.lotus-export-display{margin:.8rem 0}
-.lotus-export-html{width:100%;height:520px;border:1px solid #d8dde5;border-radius:8px;background:#fff}
-.lotus-export-inline-graph{box-sizing:border-box;width:100%;border:1px solid #d8dde5;border-radius:8px;background:#fbfcfe;overflow:hidden}
-.lotus-export-image{max-width:100%;height:auto;background:#fff}
-.lotus-export-artifacts{display:grid;gap:.4rem;margin:.7rem 0}
-.lotus-export-artifact{display:flex;justify-content:space-between;gap:1rem;padding:.55rem .65rem;border:1px solid #d8dde5;border-radius:8px;background:#f8fafc}
-.lotus-export-artifact a{color:#1c64d1;text-decoration:none}
-.lotus-export-artifact small{color:#657080}
-@media (prefers-color-scheme:dark){:root{color:#e6edf5;background:#111418}.lotus-export-header{border-color:#30363f}.lotus-export-output{background:#171b21;border-color:#2b4a72}.lotus-export-artifact{background:#111820;border-color:#30363f}.lotus-export-header p,.lotus-export-output-meta,.lotus-export-label,.lotus-export-artifact small{color:#aab4c0}}
-`.trim();
-
-function renderMarkdownFragment(source: string): string {
-  const lines = source.split(/\r?\n/);
-  const html: string[] = [];
-  let paragraph: string[] = [];
-  let list: string[] = [];
-  const flushParagraph = () => {
-    if (paragraph.length) {
-      html.push(`<p>${paragraph.join("<br>")}</p>`);
-      paragraph = [];
-    }
-  };
-  const flushList = () => {
-    if (list.length) {
-      html.push(`<ul>${list.map((item) => `<li>${item}</li>`).join("")}</ul>`);
-      list = [];
-    }
-  };
-
-  for (const raw of lines) {
-    const line = raw.trimEnd();
-    const trimmed = line.trim();
-    if (!trimmed) {
-      flushParagraph();
-      flushList();
-      continue;
-    }
-    const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
-    if (heading) {
-      flushParagraph();
-      flushList();
-      html.push(`<h${heading[1].length}>${renderInlineMarkdown(heading[2])}</h${heading[1].length}>`);
-      continue;
-    }
-    if (/^[-*_]{3,}$/.test(trimmed)) {
-      flushParagraph();
-      flushList();
-      html.push("<hr>");
-      continue;
-    }
-    const bullet = trimmed.match(/^[-*]\s+(.+)$/);
-    if (bullet) {
-      flushParagraph();
-      list.push(renderInlineMarkdown(bullet[1]));
-      continue;
-    }
-    flushList();
-    paragraph.push(renderInlineMarkdown(trimmed));
-  }
-  flushParagraph();
-  flushList();
-  return html.join("\n");
-}
-
-function renderInlineMarkdown(value: string): string {
-  return escapeHtml(value)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+)\*/g, "<em>$1</em>");
-}
-
-function renderExportCodeBlock(block: lotusCodeBlock): string {
-  const label = escapeHtml(block.sourceLanguage || block.language);
-  return `<section class="lotus-export-code"><div class="lotus-export-label">${label}</div><pre><code>${escapeHtml(block.content)}</code></pre></section>`;
-}
-
-function renderExportOutput(output: lotusStoredOutput, graphAssetMode: lotusHtmlExportGraphAssetMode): string {
-  const result = output.result;
-  const parts = [
-    `<div class="lotus-export-output-meta">${escapeHtml(result.runnerName)} · exit ${escapeHtml(String(result.exitCode ?? "?"))} · ${result.durationMs} ms · ${escapeHtml(result.finishedAt)}</div>`,
-    result.stdout.trim() ? renderExportStream("stdout", result.stdout) : "",
-    result.warning?.trim() ? renderExportStream("warning", result.warning) : "",
-    result.stderr.trim() ? renderExportStream("stderr", result.stderr) : "",
-    ...(result.displays ?? []).map((display) => renderExportDisplay(display, graphAssetMode)),
-    result.artifacts?.length ? renderExportArtifacts(result.artifacts) : "",
-  ].filter(Boolean);
-  return `<section class="lotus-export-output">${parts.join("\n")}</section>`;
-}
-
-function renderExportStream(label: string, content: string): string {
-  return `<div class="lotus-export-stream"><div class="lotus-export-label">${escapeHtml(label)}</div><pre><code>${escapeHtml(content)}</code></pre></div>`;
-}
-
-class lotusHtmlExportSummaryModal extends Modal {
-  constructor(
-    private readonly lotusPlugin: lotusPlugin,
-    private readonly summary: lotusHtmlExportSummary,
-  ) {
-    super(lotusPlugin.app);
-  }
-
-  onOpen(): void {
-    const { contentEl } = this;
-    contentEl.empty();
-    contentEl.createEl("h2", { text: "Lotus HTML Export" });
-    contentEl.createEl("p", { text: this.summary.path });
-
-    const stats = contentEl.createEl("ul");
-    stats.createEl("li", { text: `Size: ${formatByteSize(this.summary.bytes)}` });
-    stats.createEl("li", { text: `Blocks: ${this.summary.blocks}` });
-    stats.createEl("li", { text: `Outputs: ${this.summary.outputs}` });
-    stats.createEl("li", { text: `Displays: ${this.summary.displays}` });
-    stats.createEl("li", { text: `Artifacts: ${this.summary.artifacts}` });
-    stats.createEl("li", { text: `Graph assets: ${formatHtmlExportGraphAssetMode(this.summary.graphAssetMode)}` });
-
-    new Setting(contentEl)
-      .addButton((button) =>
-        button
-          .setButtonText("Open")
-          .setCta()
-          .onClick(() => this.lotusPlugin.openHtmlExport(this.summary)),
-      )
-      .addButton((button) =>
-        button
-          .setButtonText("Copy Path")
-          .onClick(() => {
-            void this.lotusPlugin.copyHtmlExportPath(this.summary);
-          }),
-      )
-      .addButton((button) =>
-        button
-          .setButtonText("Close")
-          .onClick(() => this.close()),
-      );
-  }
-}
-
-function formatHtmlExportGraphAssetMode(mode: lotusHtmlExportGraphAssetMode): string {
-  return mode === "self-contained" ? "Self-contained SVG" : "CDN libraries";
-}
-
-function formatByteSize(size: number): string {
-  if (size < 1024) {
-    return `${size} B`;
-  }
-  if (size < 1024 * 1024) {
-    return `${(size / 1024).toFixed(1)} KB`;
-  }
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function renderExportHtmlFrame(label: string, html: string, height: number): string {
-  return `<div class="lotus-export-display"><div class="lotus-export-label">${label}</div><iframe class="lotus-export-html" sandbox="allow-forms allow-popups allow-scripts" referrerpolicy="no-referrer" style="height:${Math.round(height)}px" srcdoc="${escapeAttribute(html)}"></iframe></div>`;
-}
-
-function renderPlotlyExportHtml(value: unknown, display: lotusDisplayOutput): string {
-  const payload = serializeExportJson(value);
-  const title = escapeHtml(display.title?.trim() || "Lotus Plotly display");
-  return `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${title}</title>
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-<style>
-html,body{margin:0;width:100%;height:100%;background:#fbfcfe;color:#1f2937;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-#chart{box-sizing:border-box;width:100%;height:100%;min-height:320px;padding:8px 10px 6px 6px}
-.fallback{display:none;margin:16px;padding:12px;border:1px solid #d8dde5;border-radius:6px;background:#f8fafc;color:#475569;font-size:14px}
-</style>
-</head>
-<body>
-<div id="chart" role="img" aria-label="${title}"></div>
-<p id="fallback" class="fallback">Plotly could not load. The display data is still available in the exported HTML source.</p>
-<script>
-const figure = ${payload};
-const data = Array.isArray(figure?.data) ? figure.data : Array.isArray(figure) ? figure : [];
-const colorway = ["#344054", "#667085", "#0f766e", "#9a3412", "#7c3aed", "#475569"];
-const styledData = data.map((trace, index) => {
-  if (!trace || typeof trace !== "object") return trace;
-  const color = colorway[index % colorway.length];
-  return {
-    ...trace,
-    marker: { color, size: 6, ...(trace.marker || {}) },
-    line: { color, width: 2, ...(trace.line || {}) }
-  };
-});
-const figureLayout = figure && typeof figure === "object" && !Array.isArray(figure) ? figure.layout || {} : {};
-const baseAxis = {
-  automargin: true,
-  showline: true,
-  linecolor: "#d0d5dd",
-  tickcolor: "#d0d5dd",
-  tickfont: { color: "#667085", size: 11 },
-  zeroline: false
-};
-const baseLayout = {
-  paper_bgcolor: "#fbfcfe",
-  plot_bgcolor: "#fbfcfe",
-  colorway,
-  margin: { l: 56, r: 28, t: 44, b: 52 },
-  font: { family: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif", color: "#344054", size: 12 },
-  title: { font: { size: 15, color: "#1f2937" }, x: 0.02, xanchor: "left" },
-  xaxis: { ...baseAxis, showgrid: false },
-  yaxis: { ...baseAxis, gridcolor: "#e5e7eb", gridwidth: 1 },
-  hovermode: "x unified",
-  hoverlabel: { bgcolor: "#111827", bordercolor: "#111827", font: { color: "#ffffff", size: 12 } },
-  legend: { orientation: "h", y: 1.1, x: 0, font: { size: 11, color: "#475569" } }
-};
-const layout = {
-  ...baseLayout,
-  ...figureLayout,
-  margin: { ...baseLayout.margin, ...(figureLayout.margin || {}) },
-  font: { ...baseLayout.font, ...(figureLayout.font || {}) },
-  title: { ...baseLayout.title, ...(figureLayout.title || {}) },
-  xaxis: { ...baseLayout.xaxis, ...(figureLayout.xaxis || {}) },
-  yaxis: { ...baseLayout.yaxis, ...(figureLayout.yaxis || {}) },
-  legend: { ...baseLayout.legend, ...(figureLayout.legend || {}) }
-};
-const config = {
-  responsive: true,
-  displaylogo: false,
-  modeBarButtonsToRemove: ["lasso2d", "select2d"],
-  ...(figure && typeof figure === "object" && !Array.isArray(figure) ? figure.config || {} : {})
-};
-if (window.Plotly && data.length) {
-  window.Plotly.newPlot("chart", styledData, layout, config);
-} else {
-  document.getElementById("chart").style.display = "none";
-  document.getElementById("fallback").style.display = "block";
-}
-</script>
-</body>
-</html>`;
-}
-
-function renderD3ExportHtml(value: unknown, display: lotusDisplayOutput): string {
-  const payload = serializeExportJson(value);
-  const title = escapeHtml(display.title?.trim() || "Lotus D3 display");
-  return `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${title}</title>
-<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
-<style>
-html,body{margin:0;width:100%;height:100%;background:#fbfcfe;color:#1f2937;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-#chart{box-sizing:border-box;width:100%;height:100%;min-height:320px;padding:14px 16px 10px}
-.axis text{fill:#667085;font-size:11px}.axis path,.axis line{stroke:#d0d5dd}.axis .domain{stroke:#d0d5dd}.grid line{stroke:#e5e7eb}.grid .domain{display:none}.series{fill:none;stroke:#475569;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.dot{fill:#475569;stroke:#fbfcfe;stroke-width:2}.bar{fill:#475569}.fallback{display:none;margin:16px;padding:12px;border:1px solid #d8dde5;border-radius:6px;background:#f8fafc;color:#475569;font-size:14px}
-</style>
-</head>
-<body>
-<div id="chart" role="img" aria-label="${title}"></div>
-<p id="fallback" class="fallback">D3 could not load. The display data is still available in the exported HTML source.</p>
-<script>
-const spec = ${payload};
-function readNumber(value, fallback) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
-}
-function readRows(spec) {
-  return Array.isArray(spec?.data) ? spec.data : [];
-}
-function render() {
-  if (!window.d3) {
-    document.getElementById("fallback").style.display = "block";
-    return;
-  }
-  const rows = readRows(spec);
-  const kind = spec?.kind || "line";
-  const xKey = spec?.xKey || "x";
-  const yKey = spec?.yKey || "y";
-  const labelKey = spec?.labelKey || "label";
-  const valueKey = spec?.valueKey || "value";
-  const color = spec?.color || "#475569";
-  const root = d3.select("#chart");
-  const rect = root.node().getBoundingClientRect();
-  const width = Math.max(360, rect.width || 760);
-  const height = Math.max(300, rect.height || 420);
-  const margin = { top: 18, right: 24, bottom: 42, left: 54 };
-  const innerWidth = width - margin.left - margin.right;
-  const innerHeight = height - margin.top - margin.bottom;
-  const svg = root.append("svg").attr("viewBox", [0, 0, width, height]).attr("width", "100%").attr("height", height);
-  const plot = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-  if (kind === "bar") {
-    const data = rows.map((row, index) => ({ label: String(row[labelKey] ?? row[xKey] ?? index + 1), value: readNumber(row[valueKey] ?? row[yKey], 0) }));
-    const x = d3.scaleBand().domain(data.map((row) => row.label)).range([0, innerWidth]).padding(0.25);
-    const y = d3.scaleLinear().domain([0, d3.max(data, (row) => row.value) || 1]).nice().range([innerHeight, 0]);
-    plot.append("g").attr("class", "grid").call(d3.axisLeft(y).ticks(5).tickSize(-innerWidth).tickFormat(""));
-    plot.append("g").attr("class", "axis").attr("transform", "translate(0," + innerHeight + ")").call(d3.axisBottom(x));
-    plot.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(5));
-    plot.selectAll("rect").data(data).join("rect").attr("class", "bar").attr("x", (row) => x(row.label) || 0).attr("y", (row) => y(row.value)).attr("width", x.bandwidth()).attr("height", (row) => innerHeight - y(row.value)).attr("rx", 3).attr("fill", (row) => row.color || color);
-    return;
-  }
-  const data = rows.map((row, index) => ({ x: readNumber(row[xKey], index), y: readNumber(row[yKey] ?? row[valueKey], 0) }));
-  const x = d3.scaleLinear().domain(d3.extent(data, (row) => row.x)).nice().range([0, innerWidth]);
-  const y = d3.scaleLinear().domain(d3.extent(data, (row) => row.y)).nice().range([innerHeight, 0]);
-  plot.append("g").attr("class", "grid").call(d3.axisLeft(y).ticks(5).tickSize(-innerWidth).tickFormat(""));
-  plot.append("g").attr("class", "axis").attr("transform", "translate(0," + innerHeight + ")").call(d3.axisBottom(x).ticks(6));
-  plot.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(5));
-  if (kind !== "scatter") {
-    plot.append("path").datum(data).attr("class", "series").attr("stroke", color).attr("d", d3.line().x((row) => x(row.x)).y((row) => y(row.y)));
-  }
-  plot.selectAll("circle").data(data).join("circle").attr("class", "dot").attr("fill", color).attr("cx", (row) => x(row.x)).attr("cy", (row) => y(row.y)).attr("r", 3.8);
-}
-render();
-</script>
-</body>
-</html>`;
-}
-
-function renderExportInlineGraph(label: string, svg: string, height: number): string {
-  return `<div class="lotus-export-display"><div class="lotus-export-label">${label}</div><div class="lotus-export-inline-graph" style="min-height:${Math.round(height)}px">${svg}</div></div>`;
-}
-
-function renderPlotlyExportSvg(value: unknown, display: lotusDisplayOutput): string {
-  const figure = isRecord(value) ? value : {};
-  const traces = Array.isArray(figure.data) ? figure.data.filter(isRecord) : Array.isArray(value) ? value.filter(isRecord) : [];
-  if (!traces.length) {
-    return renderExportGraphNoticeSvg(display.title ?? "Plotly Display", "No plottable traces were found.");
-  }
-
-  const series = traces
-    .map((trace, index) => {
-      const y = readNumberArray(trace.y);
-      if (!y.length) {
-        return null;
-      }
-      const xValues = readLabelArray(trace.x, y.length);
-      return {
-        name: readStringValue(trace.name) || `Series ${index + 1}`,
-        xLabels: xValues,
-        y,
-        color: readTraceColor(trace, index),
-      };
-    })
-    .filter((trace): trace is { name: string; xLabels: string[]; y: number[]; color: string } => Boolean(trace));
-
-  if (!series.length) {
-    return renderExportGraphNoticeSvg(display.title ?? "Plotly Display", "No numeric Y values were found.");
-  }
-
-  const labels = series[0].xLabels;
-  return renderExportLineSvg({
-    title: readPlotTitle(figure) || display.title || "Plotly Display",
-    labels,
-    series,
-    yTitle: readAxisTitle(figure, "yaxis"),
-  });
-}
-
-function renderD3ExportSvg(value: unknown, display: lotusDisplayOutput): string {
-  if (!isRecord(value)) {
-    return renderExportGraphNoticeSvg(display.title ?? "D3 Display", "The D3 payload was not an object.");
-  }
-  const rows = Array.isArray(value.data) ? value.data.filter(isRecord) : [];
-  if (!rows.length) {
-    return renderExportGraphNoticeSvg(display.title ?? "D3 Display", "No rows were found.");
-  }
-  const kind = readStringValue(value.kind) || "line";
-  const xKey = readStringValue(value.xKey) || "x";
-  const yKey = readStringValue(value.yKey) || "y";
-  const labelKey = readStringValue(value.labelKey) || "label";
-  const valueKey = readStringValue(value.valueKey) || "value";
-  const color = readStringValue(value.color) || "#475569";
-
-  if (kind === "bar") {
-    return renderExportBarSvg({
-      title: display.title || "D3 Display",
-      bars: rows.map((row, index) => ({
-        label: readStringValue(row[labelKey]) || readStringValue(row[xKey]) || String(index + 1),
-        value: readExportNumber(row[valueKey] ?? row[yKey], 0),
-        color: readStringValue(row.color) || color,
-      })),
-    });
-  }
-
-  const points = rows.map((row, index) => ({
-    label: readStringValue(row[labelKey]) || String(readExportNumber(row[xKey], index)),
-    y: readExportNumber(row[yKey] ?? row[valueKey], 0),
-  }));
-  return renderExportLineSvg({
-    title: display.title || "D3 Display",
-    labels: points.map((point) => point.label),
-    series: [{ name: display.title || "Value", xLabels: points.map((point) => point.label), y: points.map((point) => point.y), color }],
-  });
-}
-
-function renderExportLineSvg(spec: { title: string; labels: string[]; series: Array<{ name: string; xLabels: string[]; y: number[]; color: string }>; yTitle?: string }): string {
-  const width = 920;
-  const height = 420;
-  const margin = { top: 56, right: 32, bottom: 56, left: 72 };
-  const innerWidth = width - margin.left - margin.right;
-  const innerHeight = height - margin.top - margin.bottom;
-  const allY = spec.series.flatMap((series) => series.y);
-  const yMin = Math.min(0, ...allY);
-  const yMax = Math.max(1, ...allY);
-  const ySpan = yMax - yMin || 1;
-  const xFor = (index: number, count: number) => margin.left + (count <= 1 ? innerWidth / 2 : (index / (count - 1)) * innerWidth);
-  const yFor = (value: number) => margin.top + innerHeight - ((value - yMin) / ySpan) * innerHeight;
-  const ticks = Array.from({ length: 5 }, (_, index) => yMin + (ySpan * index) / 4);
-  const longest = spec.series.reduce((count, series) => Math.max(count, series.y.length), 0);
-  const labels = spec.labels.length ? spec.labels : Array.from({ length: longest }, (_, index) => String(index + 1));
-  const labelStep = Math.max(1, Math.ceil(labels.length / 6));
-
-  const grid = ticks.map((tick) => {
-    const y = yFor(tick);
-    return `<line x1="${margin.left}" y1="${roundSvg(y)}" x2="${width - margin.right}" y2="${roundSvg(y)}" stroke="#e5e7eb"/><text x="${margin.left - 12}" y="${roundSvg(y + 4)}" text-anchor="end" fill="#667085" font-size="11">${escapeHtml(formatSvgTick(tick))}</text>`;
-  }).join("");
-  const paths = spec.series.map((series) => {
-    const path = series.y.map((value, index) => `${index === 0 ? "M" : "L"}${roundSvg(xFor(index, series.y.length))},${roundSvg(yFor(value))}`).join(" ");
-    const dots = series.y.map((value, index) => `<circle cx="${roundSvg(xFor(index, series.y.length))}" cy="${roundSvg(yFor(value))}" r="3.8" fill="${escapeAttribute(series.color)}" stroke="#fbfcfe" stroke-width="2"/>`).join("");
-    return `<path d="${path}" fill="none" stroke="${escapeAttribute(series.color)}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>${dots}`;
-  }).join("");
-  const xLabels = labels
-    .map((label, index) => index % labelStep === 0 || index === labels.length - 1
-      ? `<text x="${roundSvg(xFor(index, labels.length))}" y="${height - 24}" text-anchor="middle" fill="#667085" font-size="11">${escapeHtml(label)}</text>`
-      : "")
-    .join("");
-  const legend = spec.series.map((series, index) => {
-    const x = margin.left + index * 120;
-    return `<g transform="translate(${x},22)"><line x1="0" y1="0" x2="20" y2="0" stroke="${escapeAttribute(series.color)}" stroke-width="2"/><text x="28" y="4" fill="#475569" font-size="11">${escapeHtml(series.name)}</text></g>`;
-  }).join("");
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeAttribute(spec.title)}" style="display:block;width:100%;height:auto;background:#fbfcfe">
-<rect width="${width}" height="${height}" fill="#fbfcfe"/>
-<text x="${margin.left}" y="32" fill="#1f2937" font-size="16" font-family="ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">${escapeHtml(spec.title)}</text>
-${legend}
-<g font-family="ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">
-${grid}
-<line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" stroke="#d0d5dd"/>
-<line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" stroke="#d0d5dd"/>
-${xLabels}
-${spec.yTitle ? `<text x="18" y="${margin.top + innerHeight / 2}" transform="rotate(-90 18 ${margin.top + innerHeight / 2})" text-anchor="middle" fill="#667085" font-size="11">${escapeHtml(spec.yTitle)}</text>` : ""}
-${paths}
-</g>
-</svg>`;
-}
-
-function renderExportBarSvg(spec: { title: string; bars: Array<{ label: string; value: number; color: string }> }): string {
-  const width = 920;
-  const height = 420;
-  const margin = { top: 56, right: 32, bottom: 64, left: 72 };
-  const innerWidth = width - margin.left - margin.right;
-  const innerHeight = height - margin.top - margin.bottom;
-  const max = Math.max(1, ...spec.bars.map((bar) => bar.value));
-  const band = innerWidth / Math.max(1, spec.bars.length);
-  const barWidth = Math.max(16, band * 0.56);
-  const ticks = Array.from({ length: 5 }, (_, index) => (max * index) / 4);
-  const yFor = (value: number) => margin.top + innerHeight - (value / max) * innerHeight;
-  const grid = ticks.map((tick) => {
-    const y = yFor(tick);
-    return `<line x1="${margin.left}" y1="${roundSvg(y)}" x2="${width - margin.right}" y2="${roundSvg(y)}" stroke="#e5e7eb"/><text x="${margin.left - 12}" y="${roundSvg(y + 4)}" text-anchor="end" fill="#667085" font-size="11">${escapeHtml(formatSvgTick(tick))}</text>`;
-  }).join("");
-  const bars = spec.bars.map((bar, index) => {
-    const x = margin.left + index * band + (band - barWidth) / 2;
-    const y = yFor(bar.value);
-    return `<rect x="${roundSvg(x)}" y="${roundSvg(y)}" width="${roundSvg(barWidth)}" height="${roundSvg(height - margin.bottom - y)}" rx="3" fill="${escapeAttribute(bar.color)}"/><text x="${roundSvg(x + barWidth / 2)}" y="${height - 32}" text-anchor="middle" fill="#667085" font-size="11">${escapeHtml(bar.label)}</text>`;
-  }).join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeAttribute(spec.title)}" style="display:block;width:100%;height:auto;background:#fbfcfe">
-<rect width="${width}" height="${height}" fill="#fbfcfe"/>
-<text x="${margin.left}" y="32" fill="#1f2937" font-size="16" font-family="ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">${escapeHtml(spec.title)}</text>
-<g font-family="ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">
-${grid}
-<line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" stroke="#d0d5dd"/>
-<line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" stroke="#d0d5dd"/>
-${bars}
-</g>
-</svg>`;
-}
-
-function renderExportGraphNoticeSvg(title: string, message: string): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 220" role="img" aria-label="${escapeAttribute(title)}" style="display:block;width:100%;height:auto;background:#fbfcfe">
-<rect x="1" y="1" width="758" height="218" rx="8" fill="#fbfcfe" stroke="#d8dde5"/>
-<text x="32" y="72" fill="#1f2937" font-size="18" font-family="ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">${escapeHtml(title)}</text>
-<text x="32" y="112" fill="#667085" font-size="13" font-family="ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">${escapeHtml(message)}</text>
-</svg>`;
-}
-
-function readNumberArray(value: unknown): number[] {
-  return Array.isArray(value)
-    ? value.map((item) => Number(item)).filter((item) => Number.isFinite(item))
-    : [];
-}
-
-function readLabelArray(value: unknown, fallbackLength: number): string[] {
-  if (Array.isArray(value) && value.length) {
-    return value.map((item) => String(item));
-  }
-  return Array.from({ length: fallbackLength }, (_, index) => String(index + 1));
-}
-
-function readExportNumber(value: unknown, fallback: number): number {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
-}
-
-function readStringValue(value: unknown): string {
-  return typeof value === "string" && value.trim() ? value.trim() : "";
-}
-
-function readTraceColor(trace: Record<string, unknown>, index: number): string {
-  const colorway = ["#344054", "#667085", "#0f766e", "#9a3412", "#7c3aed", "#475569"];
-  const line = isRecord(trace.line) ? readStringValue(trace.line.color) : "";
-  const marker = isRecord(trace.marker) ? readStringValue(trace.marker.color) : "";
-  return line || marker || colorway[index % colorway.length];
-}
-
-function readPlotTitle(figure: Record<string, unknown>): string {
-  const layout = isRecord(figure.layout) ? figure.layout : {};
-  const title = layout.title;
-  if (typeof title === "string") {
-    return title;
-  }
-  return isRecord(title) ? readStringValue(title.text) : "";
-}
-
-function readAxisTitle(figure: Record<string, unknown>, axis: string): string {
-  const layout = isRecord(figure.layout) ? figure.layout : {};
-  const axisConfig = isRecord(layout[axis]) ? layout[axis] : {};
-  const title = axisConfig.title;
-  if (typeof title === "string") {
-    return title;
-  }
-  return isRecord(title) ? readStringValue(title.text) : "";
-}
-
-function roundSvg(value: number): string {
-  return Number.isFinite(value) ? value.toFixed(2).replace(/\.?0+$/, "") : "0";
-}
-
-function formatSvgTick(value: number): string {
-  if (Math.abs(value) >= 100) {
-    return String(Math.round(value));
-  }
-  if (Math.abs(value) >= 10) {
-    return value.toFixed(1).replace(/\.0$/, "");
-  }
-  return value.toFixed(2).replace(/\.?0+$/, "");
-}
-
-function renderExportDisplay(display: lotusDisplayOutput, graphAssetMode: lotusHtmlExportGraphAssetMode): string {
-  const selected = selectExportDisplayMime(display);
-  if (!selected) {
-    return "";
-  }
-  const label = escapeHtml(formatExportDisplayLabel(display, selected.mime));
-  const metadata = readExportDisplayMetadata(display, selected.mime);
-  const height = readExportPositiveNumber(metadata.height) ?? 520;
-  if (selected.mime === LOTUS_PLOTLY_MIME || selected.mime === PLOTLY_MIME) {
-    if (graphAssetMode === "self-contained") {
-      return renderExportInlineGraph(label, renderPlotlyExportSvg(selected.value, display), height);
-    }
-    return renderExportHtmlFrame(label, renderPlotlyExportHtml(selected.value, display), height);
-  }
-  if (selected.mime === LOTUS_D3_MIME) {
-    if (graphAssetMode === "self-contained") {
-      return renderExportInlineGraph(label, renderD3ExportSvg(selected.value, display), height);
-    }
-    return renderExportHtmlFrame(label, renderD3ExportHtml(selected.value, display), height);
-  }
-  if (selected.mime === "text/html" && typeof selected.value === "string") {
-    return renderExportHtmlFrame(label, selected.value, height);
-  }
-  if (selected.mime.startsWith("image/") && typeof selected.value === "string") {
-    return `<div class="lotus-export-display"><div class="lotus-export-label">${label}</div><img class="lotus-export-image" alt="${escapeAttribute(display.title ?? "Lotus image display")}" src="${escapeAttribute(imageExportDataUrl(selected.mime, selected.value))}"></div>`;
-  }
-  const content = typeof selected.value === "string" ? selected.value : JSON.stringify(selected.value, null, 2);
-  return `<div class="lotus-export-display"><div class="lotus-export-label">${label}</div><pre><code>${escapeHtml(content)}</code></pre></div>`;
-}
-
-function renderExportArtifacts(artifacts: readonly lotusRunArtifact[]): string {
-  return `<div class="lotus-export-artifacts"><div class="lotus-export-label">artifacts</div>${artifacts.map((artifact) => {
-    const href = `data:${artifact.mimeType || "application/octet-stream"};base64,${artifact.dataBase64}`;
-    return `<div class="lotus-export-artifact"><a href="${escapeAttribute(href)}" download="${escapeAttribute(artifact.name)}" target="_blank" rel="noopener noreferrer">${escapeHtml(artifact.path || artifact.name)}</a><small>${escapeHtml(artifact.mimeType)} · ${artifact.size} bytes</small></div>`;
-  }).join("")}</div>`;
-}
-
-function selectExportDisplayMime(display: lotusDisplayOutput): { mime: string; value: unknown } | null {
-  for (const mime of [LOTUS_PLOTLY_MIME, PLOTLY_MIME, LOTUS_D3_MIME, "text/html", "image/svg+xml", "image/png", "image/jpeg", "image/gif", "text/markdown", "text/vnd.graphviz", "application/json", "text/plain"]) {
-    if (display.data[mime] != null) {
-      return { mime, value: display.data[mime] };
-    }
-  }
-  const firstMime = Object.keys(display.data)[0];
-  return firstMime ? { mime: firstMime, value: display.data[firstMime] } : null;
-}
-
-function formatExportDisplayLabel(display: lotusDisplayOutput, mime: string): string {
-  return `${display.title?.trim() || display.role || "display"} · ${mime}`;
-}
-
-function readExportDisplayMetadata(display: lotusDisplayOutput, mime: string): Record<string, unknown> {
-  const globalMetadata = isRecord(display.metadata) ? display.metadata : {};
-  const mimeMetadata = isRecord(globalMetadata[mime]) ? globalMetadata[mime] : {};
-  return { ...globalMetadata, ...mimeMetadata };
-}
-
-function readExportPositiveNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
-}
-
-function serializeExportJson(value: unknown): string {
-  return JSON.stringify(value ?? null)
-    .replace(/</g, "\\u003c")
-    .replace(/\u2028/g, "\\u2028")
-    .replace(/\u2029/g, "\\u2029");
-}
-
-function imageExportDataUrl(mime: string, value: string): string {
-  if (value.startsWith("data:")) {
-    return value;
-  }
-  if (mime === "image/svg+xml") {
-    return `data:${mime};charset=utf-8,${encodeURIComponent(value)}`;
-  }
-  return `data:${mime};base64,${value.replace(/\s/g, "")}`;
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "\"": "&quot;",
-    "'": "&#39;",
-  })[char] ?? char);
-}
-
-function escapeAttribute(value: string): string {
-  return escapeHtml(value).replace(/\n/g, "&#10;");
-}
-
-function normalizeBundleEntries(entries: lotusArchiveEntry[], fileName: string): lotusArchiveEntry[] {
-  const cleaned = entries
-    .map((entry) => ({
-      path: normalizeArchivePath(entry.path),
-      data: entry.data,
-    }))
-    .filter((entry): entry is lotusArchiveEntry => Boolean(entry.path));
-
-  const stripped = stripCommonArchiveRoot(cleaned);
-  if (!stripped.length) {
-    throw new Error(`Language bundle ${fileName} did not contain any usable files.`);
-  }
-  return stripped;
-}
-
-function normalizeArchivePath(path: string): string {
-  const normalized = normalizePath(path.replace(/\\/g, "/")).replace(/^\/+/, "");
-  const parts = normalized.split("/").filter(Boolean);
-  if (!parts.length || parts[0] === "__MACOSX" || parts[parts.length - 1] === ".DS_Store") {
-    return "";
-  }
-  if (parts.some((part) => part === "." || part === ".." || part.includes("\0") || /^[a-zA-Z]:$/.test(part))) {
-    throw new Error(`Invalid bundle path: ${path}`);
-  }
-  return parts.join("/");
-}
-
-function stripCommonArchiveRoot(entries: lotusArchiveEntry[]): lotusArchiveEntry[] {
-  const roots = entries.map((entry) => entry.path.split("/"));
-  if (!roots.length || roots.some((parts) => parts.length < 2)) {
-    return entries;
-  }
-
-  const root = roots[0][0];
-  if (!roots.every((parts) => parts[0] === root)) {
-    return entries;
-  }
-
-  return entries.map((entry) => ({
-    path: entry.path.split("/").slice(1).join("/"),
-    data: entry.data,
-  }));
-}
-
-function findBundleManifest(entries: lotusArchiveEntry[]): lotusArchiveEntry | null {
-  const named = entries.find((entry) => isBundleManifestCandidate(entry) && readBundleManifest(entry));
-  if (named) {
-    return named;
-  }
-
-  return entries.find((entry) => {
-    if (entry.path.includes("/") || !isBundleManifestCandidate(entry)) {
-      return false;
-    }
-    return Boolean(readBundleManifest(entry));
-  }) ?? null;
-}
-
-function isBundleManifestCandidate(entry: lotusArchiveEntry): boolean {
-  const fileName = entry.path.split("/").pop()?.toLowerCase() ?? "";
-  return LANGUAGE_PACK_MANIFEST_NAMES.has(fileName) || !entry.path.includes("/") && fileName.endsWith(".json");
-}
-
-function readBundleManifest(entry: lotusArchiveEntry): Record<string, unknown> | null {
-  try {
-    const parsed: unknown = JSON.parse(new TextDecoder().decode(entry.data));
-    return isRecord(parsed) && typeof parsed.id === "string" && Array.isArray(parsed.languages) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function isPathWithin(path: string, parent: string): boolean {
-  return path === parent || path.startsWith(`${parent}/`);
-}
-
-function parseExternalLanguagePack(value: unknown, filePath: string, vaultBasePath: string): lotusExternalLanguagePack | null {
-  if (!isRecord(value)) {
-    console.warn(`Ignoring lotus language pack ${filePath}: manifest must be an object`);
-    return null;
-  }
-
-  const rawId = readString(value.id);
-  const id = normalizeManifestId(rawId);
-  if (!id) {
-    console.warn(`Ignoring lotus language pack ${filePath}: missing package id`);
-    return null;
-  }
-  if (!Array.isArray(value.languages)) {
-    console.warn(`Ignoring lotus language pack ${filePath}: languages must be an array`);
-    return null;
-  }
-
-  const languages = value.languages
-    .map((language) => parseExternalLanguage(language, filePath, vaultBasePath))
-    .filter((language): language is lotusExternalLanguage => Boolean(language));
-  if (!languages.length) {
-    console.warn(`Ignoring lotus language pack ${filePath}: no valid languages`);
-    return null;
-  }
-
-  return {
-    id: `external:${id}`,
-    displayName: readString(value.displayName) || rawId,
-    description: readString(value.description) || `External language pack from ${filePath}`,
-    languages,
-  };
-}
-
-function parseExternalLanguage(value: unknown, filePath: string, vaultBasePath: string): lotusExternalLanguage | null {
-  if (!isRecord(value)) {
-    console.warn(`Ignoring language entry in ${filePath}: entry must be an object`);
-    return null;
-  }
-
-  const rawName = readString(value.id) || readString(value.name);
-  const name = normalizeManifestId(rawName);
-  const executable = readString(value.executable);
-  if (!name || !executable) {
-    console.warn(`Ignoring language entry in ${filePath}: language id/name and executable are required`);
-    return null;
-  }
-
-  return {
-    name,
-    displayName: readString(value.displayName) || rawName,
-    description: readString(value.description),
-    aliases: readAliasList(value.aliases, name).join(", "),
-    mode: readString(value.mode) === "transpile" ? "transpile" : "execute",
-    highlightLanguage: normalizeManifestLanguageReference(
-      readString(value.highlightLanguage)
-      || readString(value.highlight)
-      || readString(value.highlighting),
-    ),
-    targetLanguage: normalizeManifestLanguageReference(
-      readString(value.targetLanguage)
-      || readString(value.target),
-    ),
-    executable,
-    args: readString(value.args) || "{file}",
-    extension: normalizeExtension(readString(value.extension), name),
-    outputMode: readString(value.outputMode) === "file" ? "file" : "streams",
-    outputExtension: normalizeExtension(readString(value.outputExtension), "out"),
-    displayOutput: readDisplayOutputMode(value.displayOutput),
-    displayMimeType: normalizeDisplayMimeType(readString(value.displayMimeType) || readString(value.displayMime) || readString(value.mimeType)),
-    displayTitle: readString(value.displayTitle) || readString(value.title),
-    displayRole: readDisplayRole(readString(value.displayRole) || readString(value.role)),
-    displayHeight: readPositiveNumber(value.displayHeight ?? value.height),
-    packageDirectory: resolveManifestDirectory(filePath, vaultBasePath),
-    preprocessors: readPreprocessorList(value.preprocessors, filePath),
-    preprocessorExecutable: readString(value.preprocessorExecutable),
-    preprocessorArgs: readString(value.preprocessorArgs) || "{request}",
-    preprocessorLanguage: normalizeManifestId(readString(value.preprocessorLanguage)),
-    preprocessorExtension: readString(value.preprocessorExtension),
-    extractorMode: readString(value.extractorMode) === "transpile-c" ? "transpile-c" : "command",
-    extractorExecutable: readString(value.extractorExecutable),
-    extractorArgs: readString(value.extractorArgs) || "{request}",
-    transpileExecutable: readString(value.transpileExecutable),
-    transpileArgs: readString(value.transpileArgs) || "{request}",
-  };
-}
-
-function readPreprocessorList(value: unknown, filePath: string): lotusCustomPreprocessor[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .map((stage, index) => readPreprocessorStage(stage, index, filePath))
-    .filter((stage): stage is lotusCustomPreprocessor => Boolean(stage));
-}
-
-function readPreprocessorStage(value: unknown, index: number, filePath: string): lotusCustomPreprocessor | null {
-  if (!isRecord(value)) {
-    console.warn(`Ignoring preprocessor stage ${index + 1} in ${filePath}: stage must be an object`);
-    return null;
-  }
-
-  const executable = readString(value.executable);
-  if (!executable) {
-    console.warn(`Ignoring preprocessor stage ${index + 1} in ${filePath}: executable is required`);
-    return null;
-  }
-
-  const rawName = readString(value.id) || readString(value.name) || `stage-${index + 1}`;
-  return {
-    name: normalizeManifestId(rawName) || `stage-${index + 1}`,
-    executable,
-    args: readString(value.args) || "{request}",
-    language: normalizeManifestId(readString(value.language)),
-    extension: readString(value.extension),
-  };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function readStoredSettings(value: unknown): Partial<lotusPluginSettings> {
-  return isRecord(value) ? value : {};
-}
-
-function readString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function readPositiveNumber(value: unknown): number | undefined {
-  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value.trim()) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-function readAdapterBasePath(adapter: DataAdapter): string {
-  const maybeAdapter = adapter as unknown as { basePath?: unknown };
-  return typeof maybeAdapter.basePath === "string"
-    ? maybeAdapter.basePath
-    : "";
-}
-
-function resolveManifestDirectory(filePath: string, vaultBasePath: string): string {
-  const directory = dirname(filePath);
-  if (!vaultBasePath) {
-    return directory;
-  }
-  return join(vaultBasePath, directory);
-}
-
-function readDisplayOutputMode(value: unknown): "none" | "copy-stdout" | "replace-stdout" {
-  const normalized = readString(value).toLowerCase();
-  if (normalized === "copy" || normalized === "copy-stdout" || normalized === "stdout") {
-    return "copy-stdout";
-  }
-  if (normalized === "replace" || normalized === "replace-stdout" || normalized === "display") {
-    return "replace-stdout";
-  }
-  return "none";
-}
-
-function normalizeDisplayMimeType(value: string): string {
-  const normalized = value.trim().toLowerCase();
-  return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+(?:\+[a-z0-9!#$&^_.+-]+)?$/.test(normalized) ? normalized : "";
-}
-
-function readDisplayRole(value: string): "result" | "visualization" | "diagnostic" | "artifact" | undefined {
-  if (value === "result" || value === "visualization" || value === "diagnostic" || value === "artifact") {
-    return value;
-  }
-  return undefined;
-}
-
-function readAliasList(value: unknown, name: string): string[] {
-  const aliases = Array.isArray(value)
-    ? value.flatMap((alias) => readString(alias).split(","))
-    : readString(value).split(",");
-  return aliases
-    .map((alias) => normalizeManifestId(alias))
-    .filter((alias, index, list) => Boolean(alias) && alias !== name && list.indexOf(alias) === index);
-}
-
-function normalizeManifestId(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_.-]/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function normalizeManifestLanguageReference(value: string): string {
-  return normalizeSyntaxLanguage(value) ?? "";
-}
-
-function normalizeExtension(value: string, name: string): string {
-  if (!value) {
-    return `.${name}`;
-  }
-  return value.startsWith(".") ? value : `.${value}`;
-}
-
-function sanitizeArtifactSegment(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_.-]/g, "-")
-    .replace(/^-+|-+$/g, "") || "note";
-}
-
-function normalizePositiveInteger(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0
-    ? Math.floor(value)
-    : fallback;
-}
-
-function normalizeNonNegativeInteger(value: unknown, fallback: number, max: number): number {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    return fallback;
-  }
-  return Math.min(Math.floor(value), max);
-}
-
-function normalizePort(value: unknown, fallback: number): number {
-  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number.parseInt(value, 10) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 && parsed <= 65535 ? Math.floor(parsed) : fallback;
-}
-
-function normalizeApiHost(value: unknown, fallback: string): string {
-  if (typeof value !== "string") {
-    return fallback;
-  }
-  const trimmed = value.trim();
-  return /^(127\.0\.0\.1|localhost|::1)$/.test(trimmed) ? trimmed : fallback;
-}
-
-function normalizeStringSetting(value: unknown, fallback: string): string {
-  return typeof value === "string" ? value : fallback;
-}
-
-function normalizeBooleanSetting(value: unknown, fallback: boolean): boolean {
-  return typeof value === "boolean" ? value : fallback;
-}
-
-function normalizeMachineId(value: unknown): string {
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (/^[A-Za-z0-9._:-]{16,160}$/.test(trimmed)) {
-      return trimmed;
-    }
-  }
-  return createMachineId();
-}
-
-function createMachineId(): string {
-  const cryptoApi = typeof crypto === "undefined" ? undefined : crypto as { randomUUID?: () => string };
-  return cryptoApi?.randomUUID?.() ?? `lotus-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 14)}`;
-}
-
-function readStoredSignature(source: string): lotusSignatureRecord | null {
-  return readSignatureRecord(readStoredSignatureValue(source));
-}
-
-function getRenderedCodeElements(root: HTMLElement): HTMLElement[] {
-  const elements: HTMLElement[] = [];
-  if (root.matches("pre > code")) {
-    elements.push(root);
-  } else if (root.matches("pre")) {
-    const code = root.querySelector(":scope > code");
-    if (code instanceof HTMLElement) {
-      elements.push(code);
-    }
-  }
-
-  elements.push(...Array.from(root.querySelectorAll<HTMLElement>("pre > code")));
-  return [...new Set(elements)];
-}
-
-function renderedCodeMatchesBlock(renderedSource: string, blockSource: string): boolean {
-  const renderedVariants = codeTextVariants(renderedSource);
-  const blockVariants = codeTextVariants(blockSource);
-  return renderedVariants.some((rendered) => blockVariants.includes(rendered));
-}
-
-function codeTextVariants(value: string): string[] {
-  const normalized = value.replace(/\r\n?/g, "\n");
-  const withoutSingleTrailingNewline = normalized.endsWith("\n") ? normalized.slice(0, -1) : normalized;
-  return normalized === withoutSingleTrailingNewline
-    ? [normalized]
-    : [normalized, withoutSingleTrailingNewline];
-}
-
-function createPasswordInput(container: HTMLElement, placeholder: string): HTMLInputElement {
-  const input = container.createEl("input", {
-    attr: {
-      type: "password",
-      placeholder,
-    },
-  });
-  input.addClass("lotus-signing-password-input");
-  return input;
-}
-
-function formatSignatureScheme(scheme: string): string {
-  if (scheme === "rsa-pss-sha256") {
-    return "RSA-PSS/SHA-256";
-  }
-  if (scheme === "openssh-sshsig") {
-    return "OpenSSH SSHSIG";
-  }
-  return "passphrase HMAC/SHA-256";
-}
-
-function formatErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function appendWarning(existing: string | undefined, line: string): string {
-  return existing ? `${existing}\n${line}` : line;
-}
-
-function createObsidianLogHost(app: lotusPlugin["app"]): lotusLogHost {
-  const adapter = app.vault.adapter;
-  return {
-    get vaultName() {
-      return app.vault.getName();
-    },
-    get configDir() {
-      return app.vault.configDir;
-    },
-    get vaultBasePath() {
-      return (adapter as { basePath?: string }).basePath;
-    },
-    exists: (path) => adapter.exists(path),
-    read: (path) => adapter.read(path),
-    append: (path, content) => adapter.append(path, content),
-    write: (path, content) => adapter.write(path, content),
-    mkdir: (path) => adapter.mkdir(path),
-    postJson: async (url, headers, body) => {
-      await requestUrl({ url, method: "POST", contentType: "application/json", headers, body });
-    },
-  };
 }
