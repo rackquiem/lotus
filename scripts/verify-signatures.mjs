@@ -20,20 +20,6 @@ await esbuild.build({
   sourcemap: false,
   legalComments: "none",
   logLevel: "silent",
-  plugins: [{
-    name: "obsidian-yaml-shim",
-    setup(build) {
-      build.onResolve({ filter: /^obsidian$/ }, () => ({
-        path: "obsidian-yaml-shim",
-        namespace: "lotus-shims",
-      }));
-      build.onLoad({ filter: /.*/, namespace: "lotus-shims" }, () => ({
-        contents: "import { load } from 'js-yaml'; export function parseYaml(input) { return load(input); }",
-        loader: "js",
-        resolveDir: rootDir,
-      }));
-    },
-  }],
 });
 
 await import(`file://${outfile}?${Date.now()}`);

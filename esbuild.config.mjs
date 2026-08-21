@@ -33,7 +33,7 @@ const explicitDeployDirs = [
 console.log(`Building lotus compile profile: ${formatCompileProfile()}`);
 
 await esbuild.build({
-  entryPoints: ["src/main.ts"],
+  entryPoints: ["src/plugin/main.ts"],
   bundle: true,
   outfile: "main.js",
   format: "cjs",

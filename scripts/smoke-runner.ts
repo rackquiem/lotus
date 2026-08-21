@@ -8,23 +8,23 @@ import { createServer, request as httpRequest } from "http";
 import { request as httpsRequest } from "https";
 import { generateKeyPairSync } from "crypto";
 import { tmpdir } from "os";
-import { DEFAULT_SETTINGS } from "../src/defaultSettings";
-import { findEnabledCommandLanguage, normalizeLanguageConfiguration } from "../src/languagePackages";
-import { getLanguageCapability } from "../src/languageCapabilities";
-import { parseMarkdownCodeBlocks } from "../src/parser";
-import { resolveReferencedSource } from "../src/sourceExtract";
-import { runExternalSourcePreprocessorPipeline, type lotusExternalSourcePreprocessor } from "../src/sourcePreprocess";
-import { buildSourceReferenceHarness } from "../src/sourceHarness";
-import { createOpenSshSignature, createPassphraseSignature, createRsaSignature, readSignatureRecord, verifyOpenSshSignature, verifyPassphraseSignature, verifyRsaSignature } from "../src/signing";
-import { createBuiltInRunners } from "../src/runners/builtIn";
-import { CustomLanguageRunner } from "../src/runners/custom";
-import { lotusRunnerRegistry } from "../src/runners/registry";
-import { lotusContainerRunner } from "../src/execution/containerRunner";
-import { runProcess } from "../src/execution/processRunner";
-import { parseTimeoutMs } from "../src/utils/timeout";
-import { createSourceVisualizationDisplay, createStdoutVisualizationDisplay } from "../src/visualization/codeGraph";
-import { assertRunnableCodePackage } from "../src/codePackage";
-import type { lotusCodeBlock, lotusPluginSettings, lotusResolvedExecutionContext, lotusRunResult, lotusSourcePreview } from "../src/types";
+import { DEFAULT_SETTINGS } from "../src/engine/defaultSettings";
+import { findEnabledCommandLanguage, normalizeLanguageConfiguration } from "../src/engine/languagePackages";
+import { getLanguageCapability } from "../src/engine/languageCapabilities";
+import { parseMarkdownCodeBlocks } from "../src/engine/parser";
+import { resolveReferencedSource } from "../src/engine/sourceExtract";
+import { runExternalSourcePreprocessorPipeline, type lotusExternalSourcePreprocessor } from "../src/engine/sourcePreprocess";
+import { buildSourceReferenceHarness } from "../src/engine/sourceHarness";
+import { createOpenSshSignature, createPassphraseSignature, createRsaSignature, readSignatureRecord, verifyOpenSshSignature, verifyPassphraseSignature, verifyRsaSignature } from "../src/engine/signing";
+import { createBuiltInRunners } from "../src/engine/runners/builtIn";
+import { CustomLanguageRunner } from "../src/engine/runners/custom";
+import { lotusRunnerRegistry } from "../src/engine/runners/registry";
+import { lotusContainerRunner } from "../src/engine/execution/containerRunner";
+import { runProcess } from "../src/engine/execution/processRunner";
+import { parseTimeoutMs } from "../src/engine/utils/timeout";
+import { createSourceVisualizationDisplay, createStdoutVisualizationDisplay } from "../src/engine/visualization/codeGraph";
+import { assertRunnableCodePackage } from "../src/engine/codePackage";
+import type { lotusCodeBlock, lotusPluginSettings, lotusResolvedExecutionContext, lotusRunResult, lotusSourcePreview } from "../src/engine/types";
 
 type SmokeProfile = "minimal" | "systems" | "proofs" | "ebpf" | "full";
 
@@ -81,16 +81,7 @@ const registry = new lotusRunnerRegistry([
   ...createBuiltInRunners(),
   new CustomLanguageRunner(),
 ]);
-const containerRunner = new lotusContainerRunner({
-  vault: {
-    adapter: {
-      basePath: vaultDir,
-    },
-  },
-  metadataCache: {
-    getFileCache: () => ({ frontmatter: {} }),
-  },
-} as never, pluginDir, smokeRequestUrl);
+const containerRunner = new lotusContainerRunner({ containersPath: join(vaultDir, pluginDir, "containers") }, smokeRequestUrl);
 const notes = await readNotes(vaultDir);
 const results: SmokeBlockResult[] = [];
 
@@ -514,16 +505,7 @@ async function runTransportSmoke(): Promise<SmokeBlockResult[]> {
           },
         }, null, 2), "utf8");
 
-        const runner = new lotusContainerRunner({
-          vault: {
-            adapter: {
-              basePath: tempVault,
-            },
-          },
-          metadataCache: {
-            getFileCache: () => ({ frontmatter: {} }),
-          },
-        } as never, pluginDir, smokeRequestUrl);
+        const runner = new lotusContainerRunner({ containersPath: join(tempVault, pluginDir, "containers") }, smokeRequestUrl);
         const controller = new AbortController();
         const block: lotusCodeBlock = {
           id: "http-smoke",
@@ -698,7 +680,6 @@ function createSyntheticBlock(language: string, content: string): lotusCodeBlock
     fenceEnd: 3,
   };
 }
-
 
 async function runSyntheticSmoke(
   name: string,

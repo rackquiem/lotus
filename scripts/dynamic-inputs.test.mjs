@@ -3,7 +3,7 @@ import {
   parseDynamicInputDirectives,
   resolveDynamicInputValues,
   substituteDynamicInputValues,
-} from "../src/dynamicInputs.ts";
+} from "../src/engine/dynamicInputs.ts";
 
 const source = [
   "# @lotus-slider name=count label=\"Count\" min=1 max=10 step=1 default=4",

@@ -1,7 +1,7 @@
 import { dirname, isAbsolute, join } from "path";
 import { normalizePath, type App, type TFile } from "obsidian";
-import type { lotusCodeBlock, lotusExecutionContextOverride, lotusPluginSettings, lotusResolvedExecutionContext } from "./types";
-import { readFrontmatterTimeoutMs } from "./utils/timeout";
+import type { lotusCodeBlock, lotusExecutionContextOverride, lotusPluginSettings, lotusResolvedExecutionContext } from "../engine/types";
+import { readFrontmatterTimeoutMs } from "../engine/utils/timeout";
 
 interface NoteExecutionContext {
   containerGroup?: string;

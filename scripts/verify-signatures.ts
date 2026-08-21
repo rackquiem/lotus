@@ -1,23 +1,27 @@
 import { existsSync } from "fs";
+import { load as parseYaml } from "js-yaml";
 import { readFile, readdir } from "fs/promises";
 import path from "path";
 import process from "process";
-import { DEFAULT_SETTINGS } from "../src/defaultSettings";
+import { DEFAULT_SETTINGS } from "../src/engine/defaultSettings";
 import {
   createReproducibilitySnapshot,
   createSignaturePayload,
   readStoredSignatureValue,
+  setFrontmatterYamlParser,
   stableStringify,
-} from "../src/reproducibility";
+} from "../src/engine/reproducibility";
 import {
   readSignatureRecord,
   verifyOpenSshSignature,
   verifyPassphraseSignature,
   verifyRsaSignature,
   type lotusSignatureRecord,
-} from "../src/signing";
-import { sha256Hash } from "../src/utils/hash";
-import type { lotusPluginSettings } from "../src/types";
+} from "../src/engine/signing";
+import { sha256Hash } from "../src/engine/utils/hash";
+import type { lotusPluginSettings } from "../src/engine/types";
+
+setFrontmatterYamlParser((input) => parseYaml(input));
 
 interface VerifyArgs {
   vault: string;

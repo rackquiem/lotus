@@ -1,4 +1,3 @@
-import type { App, RequestUrlParam, RequestUrlResponse, TFile } from "obsidian";
 import { closeSync, constants, existsSync, openSync } from "fs";
 import { access, mkdir, readFile, readdir, rm, writeFile } from "fs/promises";
 import { basename, delimiter, isAbsolute, join, normalize as normalizeFsPath, posix as posixPath } from "path";
@@ -257,7 +256,25 @@ interface lotusCustomRuntimeRequest {
   };
 }
 
-type lotusRequestUrl = (request: RequestUrlParam | string) => Promise<Pick<RequestUrlResponse, "status" | "text">>;
+export interface lotusHttpRequest {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string | ArrayBuffer;
+  contentType?: string;
+  throw?: boolean;
+}
+
+export interface lotusHttpResponse {
+  status: number;
+  text: string;
+}
+
+export type lotusRequestUrl = (request: lotusHttpRequest | string) => Promise<lotusHttpResponse>;
+
+export interface lotusContainerHost {
+  containersPath: string;
+}
 
 interface lotusGodboltClientState {
   sessions: lotusGodboltSessionState[];
@@ -303,16 +320,9 @@ export class lotusContainerRunner {
   private readonly godboltDefaultCompilerCache = new Map<string, string | null>();
 
   constructor(
-    private readonly app: App,
-    private readonly pluginDir: string,
+    private readonly host: lotusContainerHost,
     private readonly requestUrlFn?: lotusRequestUrl,
   ) { }
-
-  getContainerGroupName(file: TFile): string | null {
-    const frontmatter = readFrontmatterRecord(this.app, file);
-    const value = frontmatter?.["lotus-execution"] ?? frontmatter?.["lotus-container"];
-    return typeof value === "string" && value.trim() ? value.trim() : null;
-  }
 
   async getGroupSummaries(): Promise<lotusContainerGroupSummary[]> {
     const builtInGroups = this.getBuiltInGroupSummaries();
@@ -2055,8 +2065,7 @@ export class lotusContainerRunner {
   }
 
   private getContainersPath(): string {
-    const adapterBasePath = (this.app.vault.adapter as { basePath?: string }).basePath ?? "";
-    return normalizeFsPath(join(adapterBasePath, this.pluginDir, "containers"));
+    return normalizeFsPath(this.host.containersPath);
   }
 
   private resolveGroupPath(groupName: string): string {
@@ -2729,7 +2738,7 @@ async function waitForHttpResponse<T>(request: Promise<T>, timeoutMs: lotusTimeo
   });
 }
 
-function decodeHttpRunResponse(http: lotusHttpConfig, response: Pick<RequestUrlResponse, "status" | "text">): lotusDecodedHttpRunResponse {
+function decodeHttpRunResponse(http: lotusHttpConfig, response: lotusHttpResponse): lotusDecodedHttpRunResponse {
   const statusSuccess = matchesHttpStatus(response.status, http.successStatuses);
   const parsed = parseHttpResponseBody(http, response.text);
   const stdout = http.stdoutPath
@@ -3312,11 +3321,6 @@ function escapeHtml(value: string): string {
 
 function escapeHtmlAttribute(value: string): string {
   return escapeHtml(value).replaceAll("`", "&#96;");
-}
-
-function readFrontmatterRecord(app: App, file: TFile): Record<string, unknown> | undefined {
-  const frontmatter: unknown = app.metadataCache.getFileCache(file)?.frontmatter;
-  return isRecord(frontmatter) ? frontmatter : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

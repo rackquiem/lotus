@@ -12,12 +12,12 @@ import {
   isCompileLoggingForced,
   isLightCompileMode,
   type lotusCompileContainerRuntime,
-} from "./buildProfile";
-import { CUSTOM_LANGUAGE_PACKAGE_ID, getAvailableLanguagePackages, getDefaultLanguageIds, getDefaultLanguagePackIds, isLanguageEnabled, normalizeLanguageConfiguration } from "./languagePackages";
-import { sha256Hash } from "./utils/hash";
-import type { lotusCustomLanguage, lotusCustomPreprocessor, lotusPluginSettings } from "./types";
+} from "../engine/buildProfile";
+import { CUSTOM_LANGUAGE_PACKAGE_ID, getAvailableLanguagePackages, getDefaultLanguageIds, getDefaultLanguagePackIds, isLanguageEnabled, normalizeLanguageConfiguration } from "../engine/languagePackages";
+import { sha256Hash } from "../engine/utils/hash";
+import type { lotusCustomLanguage, lotusCustomPreprocessor, lotusPluginSettings } from "../engine/types";
 
-export { DEFAULT_SETTINGS } from "./defaultSettings";
+export { DEFAULT_SETTINGS } from "../engine/defaultSettings";
 
 type lotusCustomLanguageTextKey = Exclude<keyof lotusCustomLanguage, "displayHeight" | "displayOutput" | "displayRole" | "extractorMode" | "mode" | "outputMode" | "packageDirectory" | "preprocessors">;
 type lotusCustomPreprocessorTextKey = keyof lotusCustomPreprocessor;

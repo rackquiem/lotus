@@ -7,7 +7,7 @@ import type {
   lotusRunArtifact,
   lotusSourcePreviewStage,
   lotusStoredOutput,
-} from "../types";
+} from "../../engine/types";
 
 interface lotusOutputPanelOptions {
   defaultVisibleLines: number;

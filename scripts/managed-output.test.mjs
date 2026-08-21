@@ -3,7 +3,7 @@ import {
   LOTUS_MANAGED_DISPLAY_LANGUAGE,
   parseManagedDisplaySource,
   renderManagedOutputMarkdown,
-} from "../src/managedOutput.ts";
+} from "../src/engine/managedOutput.ts";
 
 const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>not ``` code</text></svg>";
 const result = {

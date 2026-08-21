@@ -8,6 +8,7 @@ import {
   TFile,
   WorkspaceLeaf,
   normalizePath,
+  parseYaml,
   requestUrl,
   type DataAdapter,
   type MarkdownPostProcessorContext,
@@ -18,43 +19,43 @@ import { readFile } from "fs/promises";
 import JSZip from "jszip";
 import { dirname, isAbsolute, join } from "path";
 import { homedir } from "os";
-import { lotusContainerRunner, type lotusContainerGroupSummary } from "./execution/containerRunner";
-import { runProcess } from "./execution/processRunner";
-import { getCompileMachineHashScopeOverride, isCompileContainerGroupAllowed, isCompileFeatureAllowed, isCompileLoggingForced } from "./buildProfile";
+import { lotusContainerRunner, type lotusContainerGroupSummary } from "../engine/execution/containerRunner";
+import { runProcess } from "../engine/execution/processRunner";
+import { getCompileMachineHashScopeOverride, isCompileContainerGroupAllowed, isCompileFeatureAllowed, isCompileLoggingForced } from "../engine/buildProfile";
 import { resolveExecutionContext as resolveLotusExecutionContext } from "./executionContext";
 import { addLlvmDecorations, highlightLlvmElement } from "./llvmHighlight";
-import { lotusLogger, type lotusLogInput, type lotusLogTarget } from "./logging";
-import { resolveBlockHighlightLanguage } from "./languageHighlight";
-import { findBlockAtLine, normalizeLanguage, parseMarkdownCodeBlocks } from "./parser";
-import { getLanguageCapability } from "./languageCapabilities";
-import { findEnabledCommandLanguage, normalizeLanguageConfiguration } from "./languagePackages";
+import { lotusLogger, type lotusLogHost, type lotusLogInput, type lotusLogTarget } from "../engine/logging";
+import { resolveBlockHighlightLanguage } from "../engine/languageHighlight";
+import { findBlockAtLine, normalizeLanguage, parseMarkdownCodeBlocks } from "../engine/parser";
+import { getLanguageCapability } from "../engine/languageCapabilities";
+import { findEnabledCommandLanguage, normalizeLanguageConfiguration } from "../engine/languagePackages";
 import { ObsidianContextRunner } from "./runners/obsidianContext";
-import { CustomLanguageRunner } from "./runners/custom";
-import { createBuiltInRunners } from "./runners/builtIn";
-import { lotusRunnerRegistry } from "./runners/registry";
-import { DEFAULT_SETTINGS } from "./defaultSettings";
+import { CustomLanguageRunner } from "../engine/runners/custom";
+import { createBuiltInRunners } from "../engine/runners/builtIn";
+import { lotusRunnerRegistry } from "../engine/runners/registry";
+import { DEFAULT_SETTINGS } from "../engine/defaultSettings";
 import { lotusSettingTab, showExecutionDisabledNotice } from "./settings";
-import { resolveReferencedSource, type lotusExternalSourceExtractor } from "./sourceExtract";
-import { runExternalSourcePreprocessorPipeline, type lotusExternalSourcePreprocessor, type lotusPreprocessorPipelineSpec } from "./sourcePreprocess";
-import { buildSourceReferenceHarness } from "./sourceHarness";
+import { resolveReferencedSource, type lotusExternalSourceExtractor } from "../engine/sourceExtract";
+import { runExternalSourcePreprocessorPipeline, type lotusExternalSourcePreprocessor, type lotusPreprocessorPipelineSpec } from "../engine/sourcePreprocess";
+import { buildSourceReferenceHarness } from "../engine/sourceHarness";
 import {
   parseDynamicInputDirectives,
   resolveDynamicInputValues,
   substituteDynamicInputValues,
   type lotusDynamicInput,
-} from "./dynamicInputs";
+} from "../engine/dynamicInputs";
 import { createCodeBlockToolbar } from "./ui/codeBlockToolbar";
 import { LOTUS_LOG_VIEW_TYPE, lotusLogView } from "./ui/logView";
 import { createOutputPanel, createRunningPanel, renderDisplayOutput } from "./ui/outputPanel";
-import { createSourceVisualizationDisplay, createStdoutVisualizationDisplay } from "./visualization/codeGraph";
+import { createSourceVisualizationDisplay, createStdoutVisualizationDisplay } from "../engine/visualization/codeGraph";
 import { LOTUS_D3_MIME, LOTUS_PLOTLY_MIME, PLOTLY_MIME, createJavaScriptGraphDisplayRenderers } from "./visualization/javascriptGraphs";
 import { addSyntaxLanguageClass, highlightCodeElement, normalizeSyntaxLanguage } from "./syntaxHighlight";
-import { splitCommandLine } from "./utils/command";
-import { sha256Hash } from "./utils/hash";
-import { formatTimeoutLabel, formatTimeoutMs } from "./utils/timeout";
-import { LOTUS_MANAGED_DISPLAY_LANGUAGE, parseManagedDisplaySource, renderManagedOutputMarkdown } from "./managedOutput";
-import { assertRunnableCodePackage } from "./codePackage";
-import { createOpenSshSignature, createPassphraseSignature, createRsaSignature, readSignatureRecord, verifyOpenSshSignature, verifyPassphraseSignature, verifyRsaSignature, type lotusSignatureRecord } from "./signing";
+import { splitCommandLine } from "../engine/utils/command";
+import { sha256Hash } from "../engine/utils/hash";
+import { formatTimeoutLabel, formatTimeoutMs } from "../engine/utils/timeout";
+import { LOTUS_MANAGED_DISPLAY_LANGUAGE, parseManagedDisplaySource, renderManagedOutputMarkdown } from "../engine/managedOutput";
+import { assertRunnableCodePackage } from "../engine/codePackage";
+import { createOpenSshSignature, createPassphraseSignature, createRsaSignature, readSignatureRecord, verifyOpenSshSignature, verifyPassphraseSignature, verifyRsaSignature, type lotusSignatureRecord } from "../engine/signing";
 import {
   CODE_BLOCK_HASHES_FRONTMATTER_KEY,
   HASH_POLICY_FRONTMATTER_KEY,
@@ -76,6 +77,7 @@ import {
   readStoredNoteHash,
   readStoredSignatureValue,
   serializeHashPolicy,
+  setFrontmatterYamlParser,
   stableStringify,
   type lotusCodeBlockHashEntry,
   type lotusHashPolicy,
@@ -84,8 +86,8 @@ import {
   type lotusReproducibilityVerification,
   type lotusReproducibilitySnapshot,
   type lotusSignaturePayload,
-} from "./reproducibility";
-import { apiBlockFromCodeBlock, apiRunFromStoredOutput, lotusApiServer, readApiLogEvents, type lotusApiBlock, type lotusApiLogEvent, type lotusApiNote, type lotusApiRun, type lotusApiRunner } from "./apiServer";
+} from "../engine/reproducibility";
+import { apiBlockFromCodeBlock, apiRunFromStoredOutput, lotusApiServer, readApiLogEvents, type lotusApiBlock, type lotusApiLogEvent, type lotusApiNote, type lotusApiRun, type lotusApiRunner } from "../engine/apiServer";
 import type {
   lotusCodeBlock,
   lotusCustomPreprocessor,
@@ -99,7 +101,7 @@ import type {
   lotusRunArtifact,
   lotusStdinSession,
   lotusStoredOutput,
-} from "./types";
+} from "../engine/types";
 
 const lotusRefreshEffect = StateEffect.define<void>();
 const EXTERNAL_LANGUAGE_PACK_DIR = "language-packs";
@@ -499,7 +501,10 @@ export default class lotusPlugin extends Plugin {
     new CustomLanguageRunner(),
   ]);
   // Exposed as public and readonly so the settings panel and modals can access container configurations and default language mapping helpers.
-  public readonly containerRunner = new lotusContainerRunner(this.app, this.manifest.dir ?? `${this.app.vault.configDir}/plugins/lotus`, requestUrl);
+  public readonly containerRunner = new lotusContainerRunner(
+    { containersPath: join(readAdapterBasePath(this.app.vault.adapter), this.manifest.dir ?? `${this.app.vault.configDir}/plugins/lotus`, "containers") },
+    requestUrl,
+  );
   private hasRegisteredMarkdownDecorator = false;
   private readonly displayRenderers = new Set<lotusDisplayRenderer>();
   private readonly outputs = new Map<string, lotusStoredOutput>();
@@ -515,9 +520,10 @@ export default class lotusPlugin extends Plugin {
   private editorViews = new Set<EditorView>();
   private lastMarkdownFilePath: string | null = null;
   private lastHtmlExport: lotusHtmlExportSummary | null = null;
-  private readonly logger = new lotusLogger(this.app, () => this.settings);
+  private readonly logger = new lotusLogger(createObsidianLogHost(this.app), () => this.settings);
 
   async onload(): Promise<void> {
+    setFrontmatterYamlParser(parseYaml);
     await this.loadSettings();
     this.addSettingTab(new lotusSettingTab(this));
     this.statusBarItemEl = this.addStatusBarItem();
@@ -1071,6 +1077,10 @@ export default class lotusPlugin extends Plugin {
     this.registerCodeBlockProcessors();
     this.notifyAllOutputsChanged();
     await this.apiServer.configure();
+  }
+
+  notify(message: string): void {
+    new Notice(message);
   }
 
   isBlockRunning(blockId: string): boolean {
@@ -5443,4 +5453,27 @@ function formatErrorMessage(error: unknown): string {
 
 function appendWarning(existing: string | undefined, line: string): string {
   return existing ? `${existing}\n${line}` : line;
+}
+
+function createObsidianLogHost(app: lotusPlugin["app"]): lotusLogHost {
+  const adapter = app.vault.adapter;
+  return {
+    get vaultName() {
+      return app.vault.getName();
+    },
+    get configDir() {
+      return app.vault.configDir;
+    },
+    get vaultBasePath() {
+      return (adapter as { basePath?: string }).basePath;
+    },
+    exists: (path) => adapter.exists(path),
+    read: (path) => adapter.read(path),
+    append: (path, content) => adapter.append(path, content),
+    write: (path, content) => adapter.write(path, content),
+    mkdir: (path) => adapter.mkdir(path),
+    postJson: async (url, headers, body) => {
+      await requestUrl({ url, method: "POST", contentType: "application/json", headers, body });
+    },
+  };
 }

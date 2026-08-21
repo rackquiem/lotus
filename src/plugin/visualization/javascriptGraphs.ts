@@ -2,7 +2,7 @@ import * as d3 from "d3";
 import ELK from "elkjs";
 import type JXG from "jsxgraph";
 import type cytoscape from "cytoscape";
-import type { lotusDisplayRenderer, lotusDisplayRendererContext, lotusDisplayRendererCleanup } from "../types";
+import type { lotusDisplayRenderer, lotusDisplayRendererContext, lotusDisplayRendererCleanup } from "../../engine/types";
 
 export const LOTUS_D3_MIME = "application/vnd.lotus.d3+json";
 export const LOTUS_PLOTLY_MIME = "application/vnd.lotus.plotly+json";

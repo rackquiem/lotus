@@ -1,6 +1,6 @@
 import { findEnabledCommandLanguage } from "./languagePackages";
 import { normalizeLanguage } from "./parser";
-import { normalizeSyntaxLanguage } from "./syntaxHighlight";
+import { normalizeSyntaxLanguage } from "./syntaxLanguage";
 import type { lotusCodeBlock, lotusNormalizedLanguage, lotusPluginSettings } from "./types";
 
 export function resolveBlockHighlightLanguage(settings: lotusPluginSettings, block: lotusCodeBlock): lotusNormalizedLanguage | null {

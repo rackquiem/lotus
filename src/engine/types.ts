@@ -1,4 +1,3 @@
-import type { TFile } from "obsidian";
 import type { lotusTimeoutMs } from "./utils/timeout";
 
 export type lotusNormalizedLanguage = string;
@@ -71,8 +70,15 @@ export interface lotusSourceCallHarness {
   print: boolean;
 }
 
+export interface lotusRunFile {
+  path: string;
+  name: string;
+  basename: string;
+  extension: string;
+}
+
 export interface lotusRunContext {
-  file: TFile;
+  file: lotusRunFile;
   workingDirectory: string;
   timeoutMs: lotusTimeoutMs;
   signal: AbortSignal;
