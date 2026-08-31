@@ -163,12 +163,13 @@ async function renderJsxGraphDisplay(container: HTMLElement, context: lotusDispl
   const boardId = nextGraphId("jsxgraph");
   surface.id = boardId;
   surface.addClass("jxgbox");
-  const board = jxg.JSXGraph.initBoard(boardId, {
+  const board = jxg.JSXGraph.initBoard(surface, {
     boundingbox: readBoundingBox(payload.boundingbox) ?? [-5, 5, 5, -5],
     axis: payload.axis !== false,
     showCopyright: false,
     showNavigation: true,
     ...boardOptions,
+    document: surface.ownerDocument,
   });
 
   for (const objectSpec of readArray(payload.objects)) {
